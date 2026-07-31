@@ -7,7 +7,7 @@ const messages = {
     baseLabel: 'Из валюты',
     resultsTitle: 'Результат',
     manageTitle: 'Валюты в списке',
-    manageHint: 'Выберите, какие валюты показывать',
+    manageHint: 'Выберите фиат и криптовалюты для списка',
     ratesUpdated: 'Курс обновлён: {date}',
     ratesCached: 'Показан сохранённый курс: {date}',
     ratesStale: 'Курс устарел: {date}',
@@ -22,6 +22,7 @@ const messages = {
     moveUp: 'Выше',
     moveDown: 'Ниже',
     dragHandle: 'Перетащить',
+    removeCurrency: 'Убрать из списка',
     themeLabel: 'Тема',
     themeLight: 'Светлая',
     themeDark: 'Тёмная',
@@ -33,10 +34,14 @@ const messages = {
     searchCurrencies: 'Поиск валюты',
     searchPlaceholder: 'Поиск…',
     searchEmpty: 'Ничего не найдено',
+    tabFiat: 'Фиат',
+    tabCrypto: 'Крипто',
+    groupFiat: 'Фиат',
+    groupCrypto: 'Крипто',
     clearAmount: 'Очистить сумму',
     skipToContent: 'К основному содержимому',
     metaDescription:
-      'FX Multi — конвертер валют с несколькими целями сразу. Быстро, без регистрации',
+      'FX Multi — конвертер валют и криптовалют с несколькими целями сразу. Быстро, без регистрации',
   },
   en: {
     appName: 'FX Multi',
@@ -45,7 +50,7 @@ const messages = {
     baseLabel: 'From',
     resultsTitle: 'Results',
     manageTitle: 'Currencies in list',
-    manageHint: 'Pick which currencies to show',
+    manageHint: 'Pick fiat and crypto to show',
     ratesUpdated: 'Rates updated: {date}',
     ratesCached: 'Showing saved rates: {date}',
     ratesStale: 'Rates outdated: {date}',
@@ -60,6 +65,7 @@ const messages = {
     moveUp: 'Move up',
     moveDown: 'Move down',
     dragHandle: 'Drag to reorder',
+    removeCurrency: 'Remove from list',
     themeLabel: 'Theme',
     themeLight: 'Light',
     themeDark: 'Dark',
@@ -71,10 +77,14 @@ const messages = {
     searchCurrencies: 'Search currencies',
     searchPlaceholder: 'Search…',
     searchEmpty: 'Nothing found',
+    tabFiat: 'Fiat',
+    tabCrypto: 'Crypto',
+    groupFiat: 'Fiat',
+    groupCrypto: 'Crypto',
     clearAmount: 'Clear amount',
     skipToContent: 'Skip to main content',
     metaDescription:
-      'FX Multi — convert one amount into many currencies at once. Fast, no sign-up',
+      'FX Multi — convert one amount into many fiat and crypto currencies at once. Fast, no sign-up',
   },
 };
 
@@ -123,29 +133,151 @@ export function t(locale, key, vars = {}) {
   return text;
 }
 
-// локализованное имя валюты или ISO-код
-export function currencyName(locale, code) {
+// локализованное имя: cryptoMeta → Intl.DisplayNames → код
+export function currencyName(locale, code, cryptoMeta = null) {
+  const upper = String(code || '').toUpperCase();
+  const cryptoName = cryptoMeta?.[upper]?.name;
+  if (cryptoName) return cryptoName;
+
   const dn = currencyDisplayNames(locale);
   try {
-    const name = dn?.of(code);
-    if (name && name !== code) return name;
+    const name = dn?.of(upper);
+    if (name && name !== upper) return name;
   } catch {
     // неизвестный код
   }
-  return code;
+  return upper || code;
 }
 
-// сумма в стиле валюты локали; null/NaN → emptyAmount
-export function formatAmount(locale, amount, currency) {
+// знаки после запятой для крипты (мелкие суммы — до 8)
+function cryptoFractionDigits(amount) {
+  if (amount >= 1000) return 2;
+  if (amount >= 1) return 4;
+  if (amount >= 0.01) return 6;
+  return 8;
+}
+
+// fallback, когда narrowSymbol всё ещё отдаёт ISO-код
+const CURRENCY_SYMBOLS = {
+  AED: 'د.إ',
+  ALL: 'L',
+  BGN: 'лв.',
+  BHD: '.د.ب',
+  BYN: 'Br',
+  CHF: 'Fr.',
+  ETB: 'Br',
+  IQD: 'ع.د',
+  IRR: '﷼',
+  JOD: 'د.ا',
+  KES: 'KSh',
+  KWD: 'د.ك',
+  MAD: 'د.م.',
+  MDL: 'L',
+  MKD: 'ден',
+  MVR: 'Rf',
+  OMR: 'ر.ع.',
+  PAB: 'B/.',
+  PEN: 'S/',
+  QAR: 'ر.ق',
+  RSD: 'дин.',
+  SAR: '﷼',
+  SCR: '₨',
+  SDG: 'ج.س.',
+  SOS: 'Sh.So.',
+  TJS: 'ЅМ',
+  TMT: 'm',
+  TND: 'د.ت',
+  TZS: 'TSh',
+  UGX: 'USh',
+  UZS: "so'm",
+  VES: 'Bs.',
+  YER: '﷼',
+};
+
+// Intl currency options: узкий значок вместо ISO-кода
+function currencyFormatOptions(currency) {
+  return {
+    style: 'currency',
+    currency,
+    currencyDisplay: 'narrowSymbol',
+  };
+}
+
+// если Intl вернул код — подставляем значок из карты
+function applyCurrencySymbol(parts, currency) {
+  const mapped = CURRENCY_SYMBOLS[currency];
+  if (!mapped) return parts.map((p) => p.value).join('');
+
+  return parts
+    .map((p) => {
+      if (p.type !== 'currency') return p.value;
+      if (p.value.toUpperCase() === currency) return mapped;
+      return p.value;
+    })
+    .join('');
+}
+
+// сумма в стиле валюты локали; крипта — число + код; null/NaN → emptyAmount
+export function formatAmount(locale, amount, currency, cryptoMeta = null) {
   if (amount == null || !Number.isFinite(amount)) {
     return t(locale, 'emptyAmount');
   }
 
-  try {
-    return new Intl.NumberFormat(localeTag(locale), {
-      style: 'currency',
-      currency,
+  const upper = String(currency || '').toUpperCase();
+  if (cryptoMeta?.[upper]) {
+    const digits = cryptoFractionDigits(Math.abs(amount));
+    const num = new Intl.NumberFormat(localeTag(locale), {
+      maximumFractionDigits: digits,
+      minimumFractionDigits: 0,
     }).format(amount);
+    return `${num} ${upper}`;
+  }
+
+  try {
+    const parts = new Intl.NumberFormat(
+      localeTag(locale),
+      currencyFormatOptions(upper),
+    ).formatToParts(amount);
+    return applyCurrencySymbol(parts, upper);
+  } catch {
+    const mapped = CURRENCY_SYMBOLS[upper];
+    const prefix = mapped || upper;
+    return `${prefix} ${amount.toLocaleString(localeTag(locale), {
+      maximumFractionDigits: 2,
+    })}`;
+  }
+}
+
+// только число без символа/кода валюты (для копирования)
+export function formatAmountNumber(
+  locale,
+  amount,
+  currency,
+  cryptoMeta = null,
+) {
+  if (amount == null || !Number.isFinite(amount)) {
+    return t(locale, 'emptyAmount');
+  }
+
+  const upper = String(currency || '').toUpperCase();
+  if (cryptoMeta?.[upper]) {
+    const digits = cryptoFractionDigits(Math.abs(amount));
+    return new Intl.NumberFormat(localeTag(locale), {
+      maximumFractionDigits: digits,
+      minimumFractionDigits: 0,
+    }).format(amount);
+  }
+
+  try {
+    const parts = new Intl.NumberFormat(
+      localeTag(locale),
+      currencyFormatOptions(upper),
+    ).formatToParts(amount);
+    return parts
+      .filter((p) => p.type !== 'currency')
+      .map((p) => p.value)
+      .join('')
+      .trim();
   } catch {
     return amount.toLocaleString(localeTag(locale), {
       maximumFractionDigits: 2,
@@ -154,15 +286,21 @@ export function formatAmount(locale, amount, currency) {
 }
 
 // компактный курс без символа валюты в стиле "92,45 RUB"
-export function formatRateValue(locale, amount, currency) {
+export function formatRateValue(locale, amount, currency, cryptoMeta = null) {
   if (amount == null || !Number.isFinite(amount)) {
     return t(locale, 'emptyAmount');
   }
 
-  const currencyDigits = currencyFractionDigits(locale, currency);
+  const upper = String(currency || '').toUpperCase();
+  const isCrypto = Boolean(cryptoMeta?.[upper]);
+  const currencyDigits = isCrypto
+    ? cryptoFractionDigits(Math.abs(amount))
+    : currencyFractionDigits(locale, upper);
+
   // больше знаков для мелких курсов, меньше для крупных
-  const digits =
-    currencyDigits === 0 && amount >= 1
+  const digits = isCrypto
+    ? currencyDigits
+    : currencyDigits === 0 && amount >= 1
       ? 0
       : amount >= 100
         ? Math.max(currencyDigits, 2)
@@ -175,9 +313,9 @@ export function formatRateValue(locale, amount, currency) {
       maximumFractionDigits: digits,
       minimumFractionDigits: 0,
     }).format(amount);
-    return `${num} ${currency}`;
+    return `${num} ${upper}`;
   } catch {
-    return `${amount} ${currency}`;
+    return `${amount} ${upper}`;
   }
 }
 

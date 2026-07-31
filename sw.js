@@ -1,5 +1,5 @@
 // имя Cache Storage; bump при смене списка ассетов
-const CACHE = 'fx-multi-v2';
+const CACHE = 'fx-multi-v3';
 
 // shell приложения для offline (без API курсов)
 const ASSETS = [
@@ -45,29 +45,31 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// GET same-origin: cache-first с обновлением в фоне
-// open.er-api.com не трогаем — курсы живут в localStorage приложения
+// GET same-origin: network-first, кэш только как offline fallback
+// open.er-api.com / api.coingecko.com не трогаем — курсы в localStorage
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return;
 
   const url = new URL(request.url);
   // API курсов не кэшируем SW — остаётся localStorage в приложении
-  if (url.hostname === 'open.er-api.com') return;
+  if (
+    url.hostname === 'open.er-api.com' ||
+    url.hostname === 'api.coingecko.com' ||
+    url.hostname.endsWith('coingecko.com')
+  ) {
+    return;
+  }
 
   event.respondWith(
-    caches.match(request).then((cached) => {
-      const network = fetch(request)
-        .then((response) => {
-          if (response.ok && url.origin === self.location.origin) {
-            const copy = response.clone();
-            caches.open(CACHE).then((cache) => cache.put(request, copy));
-          }
-          return response;
-        })
-        .catch(() => cached);
-      // offline: отдаём кэш; online: кэш или сеть
-      return cached || network;
-    }),
+    fetch(request)
+      .then((response) => {
+        if (response.ok && url.origin === self.location.origin) {
+          const copy = response.clone();
+          caches.open(CACHE).then((cache) => cache.put(request, copy));
+        }
+        return response;
+      })
+      .catch(() => caches.match(request).then((cached) => cached)),
   );
 });

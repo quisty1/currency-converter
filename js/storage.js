@@ -7,7 +7,7 @@ const defaults = {
   locale: 'ru',
   base: 'USD',
   amount: '100',
-  targets: ['RUB', 'EUR', 'TRY', 'GBP'],
+  targets: ['RUB', 'EUR', 'BTC', 'ETH'],
   ratesCache: null,
 };
 

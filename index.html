@@ -267,7 +267,31 @@
             placeholder="Поиск…"
           />
         </label>
-        <div id="manage-list" class="manage-list"></div>
+        <div class="manage-tabs" role="tablist" aria-label="Asset type">
+          <button
+            type="button"
+            role="tab"
+            id="tab-fiat"
+            class="manage-tab"
+            data-tab="fiat"
+            aria-selected="true"
+            data-i18n="tabFiat"
+          >
+            Фиат
+          </button>
+          <button
+            type="button"
+            role="tab"
+            id="tab-crypto"
+            class="manage-tab"
+            data-tab="crypto"
+            aria-selected="false"
+            data-i18n="tabCrypto"
+          >
+            Крипто
+          </button>
+        </div>
+        <div id="manage-list" class="manage-list" role="tabpanel"></div>
       </div>
     </div>
 

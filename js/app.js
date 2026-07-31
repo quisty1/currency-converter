@@ -2,16 +2,22 @@
 // тема/локаль, URL sync, drag-reorder, PWA SW
 import {
   convert,
+  cryptoCodes,
   currencyCodesFromRates,
+  fetchCryptoMarkets,
   fetchRates,
+  fiatCodes,
+  hasCryptoMeta,
   isCacheStale,
   isCurrencyCode,
+  mergeRates,
   unitRate,
 } from './api.js';
-import { flagMarkup, flagUrl } from './flags.js';
+import { assetMarkup, assetUrl } from './flags.js';
 import {
   currencyName,
   formatAmount,
+  formatAmountNumber,
   formatRateDate,
   formatRateValue,
   t,
@@ -50,6 +56,9 @@ const els = {
   manageSheet: document.querySelector('.manage-sheet'),
   manageList: document.getElementById('manage-list'),
   manageSearch: document.getElementById('manage-search'),
+  manageTabs: document.querySelector('.manage-tabs'),
+  tabFiat: document.getElementById('tab-fiat'),
+  tabCrypto: document.getElementById('tab-crypto'),
   openManageBtn: document.getElementById('open-manage'),
   closeManageBtn: document.getElementById('close-manage'),
   refreshBtn: document.getElementById('refresh-rates'),
@@ -66,6 +75,8 @@ let cacheStale = false;
 let loading = false;
 // фильтр поиска в панели управления валютами
 let manageQuery = '';
+// вкладка модалки: фиат | крипто
+let manageTab = 'fiat';
 // AbortController текущего fetchRates
 let ratesAbort = null;
 // куда вернуть фокус после закрытия manage
@@ -84,6 +95,14 @@ const DRAG_THRESHOLD = 6;
 
 function availableCodes() {
   return currencyCodesFromRates(ratesPayload || state.ratesCache);
+}
+
+function currentCryptoMeta() {
+  return (ratesPayload || state.ratesCache)?.cryptoMeta || null;
+}
+
+function nameOf(code) {
+  return currencyName(state.locale, code, currentCryptoMeta());
 }
 
 // сохраняет partial и синхронизирует query string
@@ -273,27 +292,60 @@ function renderI18n() {
   syncSeoUrls();
 }
 
-// заполняет <select#base> кодами из API/seed
+// заполняет <select#base> optgroup фиат / крипто
 function fillBaseSelect() {
   const previous = state.base;
-  let codes = availableCodes();
-  if (previous && !codes.includes(previous)) {
-    codes = [...codes, previous].sort();
+  const payload = ratesPayload || state.ratesCache;
+  let fiat = fiatCodes(payload);
+  let crypto = cryptoCodes(payload);
+
+  if (previous && !fiat.includes(previous) && !crypto.includes(previous)) {
+    // неизвестный код из state — в группу фиата
+    fiat = [...fiat, previous].sort();
   }
-  els.base.innerHTML = codes
+
+  const fiatOpts = fiat
     .map((code) => {
-      const label = `${code} — ${currencyName(state.locale, code)}`;
+      const label = `${code} — ${nameOf(code)}`;
       return `<option value="${code}">${label}</option>`;
     })
     .join('');
-  els.base.value = codes.includes(previous) ? previous : codes[0] || 'USD';
+  const cryptoOpts = crypto
+    .map((code) => {
+      const label = `${code} — ${nameOf(code)}`;
+      return `<option value="${code}">${label}</option>`;
+    })
+    .join('');
+
+  const parts = [];
+  if (fiatOpts) {
+    parts.push(
+      `<optgroup label="${t(state.locale, 'groupFiat')}">${fiatOpts}</optgroup>`,
+    );
+  }
+  if (cryptoOpts) {
+    parts.push(
+      `<optgroup label="${t(state.locale, 'groupCrypto')}">${cryptoOpts}</optgroup>`,
+    );
+  }
+  els.base.innerHTML = parts.join('');
+
+  const all = [...fiat, ...crypto];
+  els.base.value = all.includes(previous) ? previous : all[0] || 'USD';
   syncBaseFlag();
 }
 
-// картинка флага рядом с select базы (в <option> img нельзя)
+// картинка флага/иконки рядом с select базы
 function syncBaseFlag() {
   if (!els.baseFlag) return;
-  const src = flagUrl(els.base.value || state.base);
+  const code = els.base.value || state.base;
+  const meta = currentCryptoMeta();
+  const src = assetUrl(code, meta);
+  const isCrypto = Boolean(meta?.[String(code).toUpperCase()]?.image);
+
+  els.baseFlag.classList.toggle('flag', !isCrypto);
+  els.baseFlag.classList.toggle('asset-icon', isCrypto);
+
   if (!src) {
     els.baseFlag.hidden = true;
     els.baseFlag.replaceChildren();
@@ -304,24 +356,46 @@ function syncBaseFlag() {
   if (!img) {
     img = document.createElement('img');
     img.alt = '';
-    img.width = 20;
-    img.height = 15;
     img.decoding = 'async';
     img.addEventListener('error', () => {
       els.baseFlag.hidden = true;
     });
     els.baseFlag.appendChild(img);
   }
+  img.width = isCrypto ? 20 : 20;
+  img.height = isCrypto ? 20 : 15;
   if (img.getAttribute('src') !== src) img.src = src;
 }
 
-// чекбоксы + стрелки порядка в панели manage
+function syncManageTabs() {
+  const isFiat = manageTab === 'fiat';
+  if (els.tabFiat) {
+    els.tabFiat.setAttribute('aria-selected', isFiat ? 'true' : 'false');
+  }
+  if (els.tabCrypto) {
+    els.tabCrypto.setAttribute('aria-selected', isFiat ? 'false' : 'true');
+  }
+  if (els.manageList) {
+    els.manageList.setAttribute(
+      'aria-labelledby',
+      isFiat ? 'tab-fiat' : 'tab-crypto',
+    );
+  }
+}
+
+// чекбоксы + стрелки порядка в панели manage (по вкладке)
 function renderManageList() {
+  syncManageTabs();
   const selected = new Set(state.targets);
   const query = manageQuery.trim().toLowerCase();
-  const codes = availableCodes().filter((code) => {
+  const payload = ratesPayload || state.ratesCache;
+  const tabCodes =
+    manageTab === 'crypto' ? cryptoCodes(payload) : fiatCodes(payload);
+  const meta = currentCryptoMeta();
+
+  const codes = tabCodes.filter((code) => {
     if (!query) return true;
-    const name = currencyName(state.locale, code).toLowerCase();
+    const name = nameOf(code).toLowerCase();
     return code.toLowerCase().includes(query) || name.includes(query);
   });
 
@@ -336,7 +410,7 @@ function renderManageList() {
     .map((code) => {
       const checked = selected.has(code);
       const disabled = code === state.base;
-      const name = currencyName(state.locale, code);
+      const name = nameOf(code);
       const canMove = checked && !disabled && orderIndex.has(code);
       const selectedOrdered = state.targets.filter((c) => c !== state.base);
       const pos = selectedOrdered.indexOf(code);
@@ -347,7 +421,7 @@ function renderManageList() {
       <div class="manage-item ${disabled ? 'is-disabled' : ''}">
         <label class="manage-item-main">
           <input type="checkbox" value="${code}" ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''} />
-          ${flagMarkup(code)}
+          ${assetMarkup(code, meta)}
           <span class="manage-code">${code}</span>
           <span class="manage-name">${name}</span>
         </label>
@@ -369,6 +443,7 @@ function renderManageList() {
 function renderResults() {
   const amount = parseAmount(els.amount.value);
   const targets = visibleTargets();
+  const meta = currentCryptoMeta();
   els.results.classList.toggle('is-loading', loading);
   els.results.setAttribute('aria-busy', loading ? 'true' : 'false');
 
@@ -377,22 +452,25 @@ function renderResults() {
     return;
   }
 
+  const canRemove = targets.length > 1;
+
   els.results.innerHTML = targets
     .map((code) => {
       const value = convert(amount, state.base, code, ratesPayload);
-      const formatted = formatAmount(state.locale, value, code);
-      const name = currencyName(state.locale, code);
+      const formatted = formatAmount(state.locale, value, code, meta);
+      const copyValue = formatAmountNumber(state.locale, value, code, meta);
+      const name = nameOf(code);
       const rate = unitRate(state.base, code, ratesPayload);
       const rateText =
         rate == null
           ? ''
           : t(state.locale, 'unitRate', {
               from: state.base,
-              rate: formatRateValue(state.locale, rate, code),
+              rate: formatRateValue(state.locale, rate, code, meta),
             });
 
       return `
-      <li class="result-row" data-code="${code}" data-copy="${formatted}">
+      <li class="result-row" data-code="${code}" data-copy="${copyValue}">
         <button
           type="button"
           class="result-drag"
@@ -411,7 +489,7 @@ function renderResults() {
         </button>
         <div class="result-meta">
           <span class="result-heading">
-            ${flagMarkup(code)}
+            ${assetMarkup(code, meta)}
             <span class="result-code">${code}</span>
           </span>
           <span class="result-name">${name}</span>
@@ -426,6 +504,23 @@ function renderResults() {
             aria-label="${t(state.locale, 'copyAmount')}"
           >${t(state.locale, 'copyAmount')}</button>
         </div>
+        <button
+          type="button"
+          class="result-remove"
+          data-remove-btn
+          aria-label="${t(state.locale, 'removeCurrency')}"
+          ${canRemove ? '' : 'disabled'}
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+            <path
+              d="M3.5 3.5l7 7M10.5 3.5l-7 7"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+            />
+          </svg>
+        </button>
       </li>
     `;
     })
@@ -478,7 +573,7 @@ function renderAll() {
   els.swapBtn.disabled = visibleTargets().length === 0;
 }
 
-// загрузка курсов для base
+// загрузка курсов: фиат (USD) + крипта параллельно, merge
 // свежий кэш — без сети; иначе stale-while-revalidate + force
 async function loadRates(base = state.base, { force = false } = {}) {
   if (ratesAbort) ratesAbort.abort();
@@ -489,7 +584,8 @@ async function loadRates(base = state.base, { force = false } = {}) {
   const cached = state.ratesCache;
   const stale = isCacheStale(cached);
 
-  if (!force && cached?.rates && !stale) {
+  // без cryptoMeta кэш неполный (старый фиат-only) — догружаем сеть
+  if (!force && cached?.rates && !stale && hasCryptoMeta(cached)) {
     ratesPayload = cached;
     usingCache = false;
     cacheStale = false;
@@ -515,12 +611,53 @@ async function loadRates(base = state.base, { force = false } = {}) {
   renderStatus();
 
   try {
-    const payload = await fetchRates(requestBase, { signal });
-    // устаревший ответ (смена базы / abort) игнорируем
+    // фиат всегда от USD (API не принимает крипту как base)
+    const [fiatResult, cryptoResult] = await Promise.allSettled([
+      fetchRates('USD', { signal }),
+      fetchCryptoMarkets({ signal }),
+    ]);
+
     if (signal.aborted || requestBase !== state.base) return;
 
+    const fiatPayload =
+      fiatResult.status === 'fulfilled' ? fiatResult.value : null;
+    const cryptoPayload =
+      cryptoResult.status === 'fulfilled' ? cryptoResult.value : null;
+
+    // при partial failure подмешиваем куски из кэша
+    const fallbackFiat =
+      fiatPayload ||
+      (cached?.rates
+        ? {
+            base: cached.base || 'USD',
+            date: cached.date,
+            rates: Object.fromEntries(
+              Object.entries(cached.rates).filter(
+                ([code]) => !cached.cryptoMeta?.[code],
+              ),
+            ),
+            fetchedAt: cached.fetchedAt,
+          }
+        : null);
+    const fallbackCrypto =
+      cryptoPayload ||
+      (cached?.cryptoMeta
+        ? {
+            rates: Object.fromEntries(
+              Object.entries(cached.rates || {}).filter(
+                ([code]) => cached.cryptoMeta[code],
+              ),
+            ),
+            meta: cached.cryptoMeta,
+            fetchedAt: cached.fetchedAt,
+          }
+        : null);
+
+    const payload = mergeRates(fallbackFiat, fallbackCrypto);
+    if (!payload) throw new Error('no_rates');
+
     ratesPayload = payload;
-    usingCache = false;
+    usingCache = !fiatPayload || !cryptoPayload;
     cacheStale = false;
     persist({ ratesCache: payload, base: requestBase });
   } catch (error) {
@@ -592,30 +729,39 @@ function onLocaleChange() {
   renderAll();
 }
 
+// убрать валюту из списка; нельзя снять последнюю цель кроме базы
+function removeTarget(code) {
+  const targets = state.targets.filter((c) => c !== code);
+  const others = targets.filter((c) => c !== state.base);
+  if (!others.length) return false;
+
+  persist({ targets });
+  renderManageList();
+  renderResults();
+  els.swapBtn.disabled = visibleTargets().length === 0;
+  return true;
+}
+
 // чекбокс валюты; нельзя снять последнюю цель кроме базы
 function onManageChange(event) {
   const input = event.target;
   if (!(input instanceof HTMLInputElement) || input.type !== 'checkbox') return;
 
   const code = input.value;
-  let targets = [...state.targets];
 
   if (input.checked) {
+    let targets = [...state.targets];
     if (!targets.includes(code)) targets.push(code);
-  } else {
-    targets = targets.filter((c) => c !== code);
-  }
-
-  const others = targets.filter((c) => c !== state.base);
-  if (!others.length) {
-    input.checked = true;
+    persist({ targets });
+    renderManageList();
+    renderResults();
+    els.swapBtn.disabled = visibleTargets().length === 0;
     return;
   }
 
-  persist({ targets });
-  renderManageList();
-  renderResults();
-  els.swapBtn.disabled = visibleTargets().length === 0;
+  if (!removeTarget(code)) {
+    input.checked = true;
+  }
 }
 
 // переставляет visibleTargets; база остаётся в начале Set
@@ -774,6 +920,16 @@ function onManageSearchInput() {
   renderManageList();
 }
 
+function onManageTabClick(event) {
+  const btn = event.target.closest('[data-tab]');
+  if (!btn || !els.manageTabs?.contains(btn)) return;
+  const next = btn.dataset.tab;
+  if (next !== 'fiat' && next !== 'crypto') return;
+  if (manageTab === next) return;
+  manageTab = next;
+  renderManageList();
+}
+
 function onManageBackdropClick(event) {
   if (event.target === els.managePanel) {
     setManageOpen(false);
@@ -862,10 +1018,17 @@ function onResultsClick(event) {
   }
   if (event.target.closest('[data-drag-handle]')) return;
 
-  const btn = event.target.closest('[data-copy-btn]');
   const row = event.target.closest('.result-row');
   if (!row) return;
 
+  const removeBtn = event.target.closest('[data-remove-btn]');
+  if (removeBtn) {
+    if (removeBtn.disabled) return;
+    removeTarget(row.dataset.code);
+    return;
+  }
+
+  const btn = event.target.closest('[data-copy-btn]');
   const text = row.dataset.copy;
   copyText(text, btn || null);
 }
@@ -886,6 +1049,7 @@ function initControls() {
   els.manageList.addEventListener('change', onManageChange);
   els.manageList.addEventListener('click', onManageListClick);
   els.manageSearch.addEventListener('input', onManageSearchInput);
+  els.manageTabs?.addEventListener('click', onManageTabClick);
   els.openManageBtn.addEventListener('click', () => setManageOpen(true));
   els.closeManageBtn.addEventListener('click', () => setManageOpen(false));
   els.managePanel.addEventListener('click', onManageBackdropClick);
@@ -902,8 +1066,28 @@ function initControls() {
 
 function registerSw() {
   if (!('serviceWorker' in navigator)) return;
+
+  // один reload после смены контроллера, чтобы не остаться на старом SW
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (refreshing) return;
+    refreshing = true;
+    location.reload();
+  });
+
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch(() => {});
+    navigator.serviceWorker
+      .register('./sw.js')
+      .then((registration) => {
+        const checkUpdate = () => {
+          registration.update().catch(() => {});
+        };
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') checkUpdate();
+        });
+        window.addEventListener('focus', checkUpdate);
+      })
+      .catch(() => {});
   });
 }
 

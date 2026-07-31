@@ -191,3 +191,25 @@ export function flagMarkup(code) {
   if (!src) return '';
   return `<span class="flag" aria-hidden="true"><img src="${src}" alt="" width="20" height="15" loading="lazy" decoding="async" onerror="this.closest('.flag')?.remove()" /></span>`;
 }
+
+// URL иконки крипты из cryptoMeta
+export function cryptoIconUrl(code, cryptoMeta) {
+  const upper = String(code || '').toUpperCase();
+  const src = cryptoMeta?.[upper]?.image;
+  return typeof src === 'string' && src ? src : '';
+}
+
+// флаг для фиата, круглая иконка для крипты, иначе пусто
+export function assetMarkup(code, cryptoMeta = null) {
+  const cryptoSrc = cryptoIconUrl(code, cryptoMeta);
+  if (cryptoSrc) {
+    const safe = cryptoSrc.replace(/"/g, '&quot;');
+    return `<span class="asset-icon" aria-hidden="true"><img src="${safe}" alt="" width="20" height="20" loading="lazy" decoding="async" onerror="this.closest('.asset-icon')?.remove()" /></span>`;
+  }
+  return flagMarkup(code);
+}
+
+// URL картинки актива для base-flag (крипта или флаг)
+export function assetUrl(code, cryptoMeta = null) {
+  return cryptoIconUrl(code, cryptoMeta) || flagUrl(code);
+}
