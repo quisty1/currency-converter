@@ -1,0 +1,9 @@
+{
+  "name": "fx-multi",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node tests/api.test.js",
+    "serve": "npx --yes serve ."
+  }
+}

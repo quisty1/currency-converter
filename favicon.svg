@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="FX Multi">
+	<rect width="32" height="32" fill="#0A0A0A" />
+	<rect x="0" y="0" width="32" height="4" fill="#D61F26" />
+	<text x="16" y="22" text-anchor="middle" font-family="Arial Black, Helvetica, sans-serif" font-size="11" font-weight="700" letter-spacing="-0.5" fill="#F2F2F0">
+		FX
+	</text>
+</svg>
