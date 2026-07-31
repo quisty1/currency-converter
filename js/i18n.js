@@ -1,3 +1,4 @@
+// строки UI: ru / en; плейсхолдеры вида {date}, {from}, {rate}
 const messages = {
   ru: {
     appName: 'FX Multi',
@@ -32,40 +33,10 @@ const messages = {
     searchCurrencies: 'Поиск валюты',
     searchPlaceholder: 'Поиск…',
     searchEmpty: 'Ничего не найдено',
-    names: {
-      USD: 'Доллар США',
-      EUR: 'Евро',
-      RUB: 'Российский рубль',
-      TRY: 'Турецкая лира',
-      GBP: 'Фунт стерлингов',
-      JPY: 'Японская иена',
-      CNY: 'Китайский юань',
-      CHF: 'Швейцарский франк',
-      PLN: 'Польский злотый',
-      CAD: 'Канадский доллар',
-      AUD: 'Австралийский доллар',
-      UAH: 'Украинская гривна',
-      KZT: 'Казахстанский тенге',
-      BYN: 'Белорусский рубль',
-      SEK: 'Шведская крона',
-      NOK: 'Норвежская крона',
-      DKK: 'Датская крона',
-      CZK: 'Чешская крона',
-      HUF: 'Венгерский форинт',
-      RON: 'Румынский лей',
-      BGN: 'Болгарский лев',
-      INR: 'Индийская рупия',
-      BRL: 'Бразильский реал',
-      MXN: 'Мексиканский песо',
-      KRW: 'Южнокорейская вона',
-      SGD: 'Сингапурский доллар',
-      HKD: 'Гонконгский доллар',
-      NZD: 'Новозеландский доллар',
-      ZAR: 'Южноафриканский рэнд',
-      AED: 'Дирхам ОАЭ',
-      THB: 'Тайский бат',
-      ILS: 'Израильский шекель',
-    },
+    clearAmount: 'Очистить сумму',
+    skipToContent: 'К основному содержимому',
+    metaDescription:
+      'FX Multi — конвертер валют с несколькими целями сразу. Быстро, без регистрации',
   },
   en: {
     appName: 'FX Multi',
@@ -100,43 +71,49 @@ const messages = {
     searchCurrencies: 'Search currencies',
     searchPlaceholder: 'Search…',
     searchEmpty: 'Nothing found',
-    names: {
-      USD: 'US Dollar',
-      EUR: 'Euro',
-      RUB: 'Russian Ruble',
-      TRY: 'Turkish Lira',
-      GBP: 'British Pound',
-      JPY: 'Japanese Yen',
-      CNY: 'Chinese Yuan',
-      CHF: 'Swiss Franc',
-      PLN: 'Polish Zloty',
-      CAD: 'Canadian Dollar',
-      AUD: 'Australian Dollar',
-      UAH: 'Ukrainian Hryvnia',
-      KZT: 'Kazakhstani Tenge',
-      BYN: 'Belarusian Ruble',
-      SEK: 'Swedish Krona',
-      NOK: 'Norwegian Krone',
-      DKK: 'Danish Krone',
-      CZK: 'Czech Koruna',
-      HUF: 'Hungarian Forint',
-      RON: 'Romanian Leu',
-      BGN: 'Bulgarian Lev',
-      INR: 'Indian Rupee',
-      BRL: 'Brazilian Real',
-      MXN: 'Mexican Peso',
-      KRW: 'South Korean Won',
-      SGD: 'Singapore Dollar',
-      HKD: 'Hong Kong Dollar',
-      NZD: 'New Zealand Dollar',
-      ZAR: 'South African Rand',
-      AED: 'UAE Dirham',
-      THB: 'Thai Baht',
-      ILS: 'Israeli Shekel',
-    },
+    clearAmount: 'Clear amount',
+    skipToContent: 'Skip to main content',
+    metaDescription:
+      'FX Multi — convert one amount into many currencies at once. Fast, no sign-up',
   },
 };
 
+// кэш Intl.DisplayNames по BCP 47 тегу
+const displayNamesCache = new Map();
+
+function localeTag(locale) {
+  return locale === 'ru' ? 'ru-RU' : 'en-US';
+}
+
+// DisplayNames для названий валют; при недоступности Intl — null
+function currencyDisplayNames(locale) {
+  const tag = localeTag(locale);
+  let dn = displayNamesCache.get(tag);
+  if (!dn) {
+    try {
+      dn = new Intl.DisplayNames(tag, { type: 'currency' });
+    } catch {
+      dn = null;
+    }
+    displayNamesCache.set(tag, dn);
+  }
+  return dn;
+}
+
+// дробная часть валюты из NumberFormat (fallback 2)
+function currencyFractionDigits(locale, currency) {
+  try {
+    const digits = new Intl.NumberFormat(localeTag(locale), {
+      style: 'currency',
+      currency,
+    }).resolvedOptions().maximumFractionDigits;
+    return typeof digits === 'number' ? digits : 2;
+  } catch {
+    return 2;
+  }
+}
+
+// перевод ключа с подстановкой vars; fallback: ru → сам ключ
 export function t(locale, key, vars = {}) {
   const dict = messages[locale] || messages.ru;
   let text = dict[key] ?? messages.ru[key] ?? key;
@@ -146,46 +123,55 @@ export function t(locale, key, vars = {}) {
   return text;
 }
 
+// локализованное имя валюты или ISO-код
 export function currencyName(locale, code) {
-  const dict = messages[locale] || messages.ru;
-  return dict.names[code] || code;
+  const dn = currencyDisplayNames(locale);
+  try {
+    const name = dn?.of(code);
+    if (name && name !== code) return name;
+  } catch {
+    // неизвестный код
+  }
+  return code;
 }
 
+// сумма в стиле валюты локали; null/NaN → emptyAmount
 export function formatAmount(locale, amount, currency) {
   if (amount == null || !Number.isFinite(amount)) {
     return t(locale, 'emptyAmount');
   }
 
   try {
-    return new Intl.NumberFormat(locale === 'ru' ? 'ru-RU' : 'en-US', {
+    return new Intl.NumberFormat(localeTag(locale), {
       style: 'currency',
       currency,
-      maximumFractionDigits: currency === 'JPY' || currency === 'KRW' ? 0 : 2,
     }).format(amount);
   } catch {
-    return amount.toLocaleString(locale === 'ru' ? 'ru-RU' : 'en-US', {
+    return amount.toLocaleString(localeTag(locale), {
       maximumFractionDigits: 2,
     });
   }
 }
 
-/** компактный курс без символа валюты в стиле "92,45 RUB" */
+// компактный курс без символа валюты в стиле "92,45 RUB"
 export function formatRateValue(locale, amount, currency) {
   if (amount == null || !Number.isFinite(amount)) {
     return t(locale, 'emptyAmount');
   }
 
+  const currencyDigits = currencyFractionDigits(locale, currency);
+  // больше знаков для мелких курсов, меньше для крупных
   const digits =
-    currency === 'JPY' || currency === 'KRW'
+    currencyDigits === 0 && amount >= 1
       ? 0
       : amount >= 100
-        ? 2
+        ? Math.max(currencyDigits, 2)
         : amount >= 1
-          ? 4
+          ? Math.max(currencyDigits, 4)
           : 6;
 
   try {
-    const num = new Intl.NumberFormat(locale === 'ru' ? 'ru-RU' : 'en-US', {
+    const num = new Intl.NumberFormat(localeTag(locale), {
       maximumFractionDigits: digits,
       minimumFractionDigits: 0,
     }).format(amount);
@@ -195,11 +181,12 @@ export function formatRateValue(locale, amount, currency) {
   }
 }
 
+// дата/время обновления курса; битая строка — как есть
 export function formatRateDate(locale, dateStr) {
   if (!dateStr) return '—';
   const date = new Date(dateStr);
   if (Number.isNaN(date.getTime())) return dateStr;
-  return new Intl.DateTimeFormat(locale === 'ru' ? 'ru-RU' : 'en-US', {
+  return new Intl.DateTimeFormat(localeTag(locale), {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(date);

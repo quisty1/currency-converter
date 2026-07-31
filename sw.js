@@ -1,4 +1,7 @@
-const CACHE = 'fx-multi-v1';
+// имя Cache Storage; bump при смене списка ассетов
+const CACHE = 'fx-multi-v2';
+
+// shell приложения для offline (без API курсов)
 const ASSETS = [
   './',
   './index.html',
@@ -8,10 +11,17 @@ const ASSETS = [
   './js/i18n.js',
   './js/storage.js',
   './js/theme.js',
+  './js/flags.js',
   './favicon.svg',
+  './icons/icon-180.png',
+  './icons/icon-192.png',
+  './icons/icon-512.png',
   './manifest.webmanifest',
+  './robots.txt',
+  './sitemap.xml',
 ];
 
+// precache + skipWaiting, чтобы новый SW активировался сразу
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches
@@ -21,6 +31,7 @@ self.addEventListener('install', (event) => {
   );
 });
 
+// удаляет старые кэши и забирает клиентов
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches
@@ -34,6 +45,8 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+// GET same-origin: cache-first с обновлением в фоне
+// open.er-api.com не трогаем — курсы живут в localStorage приложения
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return;
@@ -53,6 +66,7 @@ self.addEventListener('fetch', (event) => {
           return response;
         })
         .catch(() => cached);
+      // offline: отдаём кэш; online: кэш или сеть
       return cached || network;
     }),
   );

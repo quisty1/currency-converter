@@ -1,44 +1,82 @@
 <!doctype html>
 <html lang="ru" data-theme="light" data-theme-mode="system">
   <head>
+    <!-- meta, OG/Twitter, PWA icons -->
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="FX Multi — конвертер валют с несколькими целями сразу"
+      content="FX Multi — конвертер валют с несколькими целями сразу. Быстро, без регистрации"
     />
     <meta name="color-scheme" content="light dark" />
+    <link rel="canonical" href="./" id="seo-canonical" />
     <meta property="og:type" content="website" />
     <meta property="og:title" content="FX Multi" />
     <meta
       property="og:description"
       content="Сумма сразу во многих валютах — быстрый конвертер без регистрации"
     />
-    <meta name="twitter:card" content="summary" />
+    <meta property="og:url" content="" id="seo-og-url" />
+    <meta property="og:locale" content="ru_RU" id="seo-og-locale" />
+    <meta property="og:locale:alternate" content="en_US" />
+    <meta property="og:image" content="icons/icon-512.png" id="seo-og-image" />
+    <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="FX Multi" />
     <meta
       name="twitter:description"
       content="Сумма сразу во многих валютах — быстрый конвертер без регистрации"
     />
+    <meta
+      name="twitter:image"
+      content="icons/icon-512.png"
+      id="seo-twitter-image"
+    />
     <title>FX Multi</title>
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-    <link rel="apple-touch-icon" href="favicon.svg" />
+    <link rel="apple-touch-icon" href="icons/icon-180.png" />
     <link rel="manifest" href="manifest.webmanifest" />
     <meta name="theme-color" content="#D61F26" />
+    <script type="application/ld+json" id="seo-jsonld">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "FX Multi",
+        "description": "Convert one amount into many currencies at once",
+        "applicationCategory": "FinanceApplication",
+        "operatingSystem": "Any",
+        "inLanguage": ["ru", "en"],
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        }
+      }
+    </script>
 
+    <!-- шрифты: неблокирующая загрузка + system fallback в CSS -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://flagcdn.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@600&family=Space+Grotesk:wght@400;600&display=swap"
       rel="stylesheet"
+      media="print"
+      onload="this.media = 'all'"
     />
+    <noscript>
+      <link
+        href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@600&family=Space+Grotesk:wght@400;600&display=swap"
+        rel="stylesheet"
+      />
+    </noscript>
     <link rel="stylesheet" href="css/styles.css" />
     <script>
-      // мгновенная тема до загрузки модулей, без мигания
+      // мгновенная тема и lang до загрузки модулей, без мигания
       (function () {
         try {
           var raw = localStorage.getItem('fx-multi-state');
-          var theme = raw ? JSON.parse(raw).theme || 'system' : 'system';
+          var parsed = raw ? JSON.parse(raw) : null;
+          var theme = (parsed && parsed.theme) || 'system';
           var dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
           var resolved =
             theme === 'light' || theme === 'dark'
@@ -48,14 +86,36 @@
                 : 'light';
           document.documentElement.dataset.theme = resolved;
           document.documentElement.dataset.themeMode = theme;
+
+          var locale = parsed && parsed.locale;
+          if (locale !== 'ru' && locale !== 'en') {
+            var langs = [].concat(
+              navigator.languages || [],
+              navigator.language || '',
+            );
+            locale = 'en';
+            for (var i = 0; i < langs.length; i++) {
+              if (String(langs[i]).toLowerCase().indexOf('ru') === 0) {
+                locale = 'ru';
+                break;
+              }
+            }
+          }
+          document.documentElement.lang = locale;
         } catch (e) {}
       })();
     </script>
   </head>
   <body>
+    <a class="skip-link" href="#main" data-i18n="skipToContent"
+      >К основному содержимому</a
+    >
+
+    <!-- фоновая сетка -->
     <div class="bg" aria-hidden="true"></div>
 
     <div class="shell">
+      <!-- бренд + тема/язык -->
       <header class="top">
         <div class="brand">
           <h1 class="brand-mark" data-i18n="appName">FX Multi</h1>
@@ -84,25 +144,41 @@
         </div>
       </header>
 
-      <main>
+      <main id="main">
+        <!-- сумма, база, swap, статус курсов -->
         <section class="convert">
           <div class="convert-grid">
             <label class="field amount-hero">
               <span data-i18n="amountLabel">Сумма</span>
-              <input
-                id="amount"
-                type="text"
-                inputmode="decimal"
-                autocomplete="off"
-                placeholder="100"
-                value="100"
-              />
+              <div class="amount-wrap">
+                <input
+                  id="amount"
+                  type="text"
+                  inputmode="decimal"
+                  autocomplete="off"
+                  placeholder="100"
+                  value="100"
+                />
+                <button
+                  type="button"
+                  id="amount-clear"
+                  class="amount-clear"
+                  hidden
+                  data-i18n-aria="clearAmount"
+                  aria-label="Очистить сумму"
+                >
+                  ×
+                </button>
+              </div>
             </label>
 
             <div class="base-row">
               <label class="field convert-base">
                 <span data-i18n="baseLabel">Из валюты</span>
-                <select id="base"></select>
+                <div class="base-select-wrap">
+                  <span id="base-flag" class="flag" aria-hidden="true"></span>
+                  <select id="base"></select>
+                </div>
               </label>
               <button
                 type="button"
@@ -117,18 +193,27 @@
           </div>
 
           <div class="status-row">
-            <p id="status" class="status" data-tone="muted" role="status"></p>
+            <p
+              id="status"
+              class="status"
+              data-tone="muted"
+              role="status"
+              aria-live="polite"
+            ></p>
             <button
               type="button"
               id="refresh-rates"
               class="btn-text"
-              data-i18n="refreshRates"
+              data-i18n-aria="refreshRates"
+              aria-busy="false"
             >
-              Обновить
+              <span class="spinner" hidden aria-hidden="true"></span>
+              <span data-i18n="refreshRates">Обновить</span>
             </button>
           </div>
         </section>
 
+        <!-- список конвертированных сумм -->
         <section class="results-block" aria-labelledby="results-heading">
           <div class="section-head">
             <h2 id="results-heading" data-i18n="resultsTitle">Результат</h2>
@@ -143,11 +228,12 @@
               Настроить список
             </button>
           </div>
-          <ul id="results" class="results"></ul>
+          <ul id="results" class="results" aria-busy="false"></ul>
         </section>
       </main>
     </div>
 
+    <!-- bottom-sheet: выбор и порядок валют -->
     <div id="manage-panel" class="manage" hidden>
       <div
         class="manage-sheet"

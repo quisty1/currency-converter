@@ -1,10 +1,14 @@
+// точка входа UI: конвертация, управление списком валют,
+// тема/локаль, URL sync, drag-reorder, PWA SW
 import {
-  CURRENCIES,
   convert,
+  currencyCodesFromRates,
   fetchRates,
   isCacheStale,
+  isCurrencyCode,
   unitRate,
 } from './api.js';
+import { flagMarkup, flagUrl } from './flags.js';
 import {
   currencyName,
   formatAmount,
@@ -15,9 +19,11 @@ import {
 import { loadState, saveState } from './storage.js';
 import { applyTheme, watchSystemTheme } from './theme.js';
 
+// селектор фокусируемых элементов внутри manage-sheet (trap Tab)
 const FOCUSABLE =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+// кэш DOM-ссылок; i18n-элементы + интерактивные контролы
 const els = {
   amountLabel: document.querySelector('[data-i18n="amountLabel"]'),
   baseLabel: document.querySelector('[data-i18n="baseLabel"]'),
@@ -32,11 +38,14 @@ const els = {
   refreshRates: document.querySelector('[data-i18n="refreshRates"]'),
   swapCurrencies: document.querySelector('[data-i18n="swapCurrencies"]'),
   amount: document.getElementById('amount'),
+  amountClear: document.getElementById('amount-clear'),
   base: document.getElementById('base'),
+  baseFlag: document.getElementById('base-flag'),
   results: document.getElementById('results'),
   status: document.getElementById('status'),
   theme: document.getElementById('theme'),
   locale: document.getElementById('locale'),
+  shell: document.querySelector('.shell'),
   managePanel: document.getElementById('manage-panel'),
   manageSheet: document.querySelector('.manage-sheet'),
   manageList: document.getElementById('manage-list'),
@@ -48,38 +57,63 @@ const els = {
 };
 
 let state = loadState();
+// актуальный payload курсов (живой или из кэша)
 let ratesPayload = state.ratesCache;
+// показали курсы из localStorage, сеть ещё не ответила / упала
 let usingCache = false;
+// кэш старше TTL
 let cacheStale = false;
 let loading = false;
+// фильтр поиска в панели управления валютами
 let manageQuery = '';
+// AbortController текущего fetchRates
 let ratesAbort = null;
+// куда вернуть фокус после закрытия manage
 let manageReturnFocus = null;
+// таймер сброса текста «Скопировано»
 let copyResetTimer = null;
+// защита от цикла replaceState ↔ popstate-логики
 let syncingUrl = false;
+// состояние pointer-drag строки результатов
 let resultsDrag = null;
+// после drag не срабатывает copy по click
 let suppressResultsCopy = false;
 
+// px до начала reorder (отсекает клик)
 const DRAG_THRESHOLD = 6;
 
+function availableCodes() {
+  return currencyCodesFromRates(ratesPayload || state.ratesCache);
+}
+
+// сохраняет partial и синхронизирует query string
 function persist(partial) {
   state = saveState(state, partial);
   syncUrlFromState();
   return state;
 }
 
+// нормализует ввод: пробелы, запятая → точка
 function parseAmount(raw) {
   const normalized = String(raw).trim().replace(/\s/g, '').replace(',', '.');
   if (!normalized) return NaN;
   return Number(normalized);
 }
 
+// пустое поле не ошибка; нечисло — ошибка
 function amountIsInvalid() {
   const raw = String(els.amount.value).trim();
   if (!raw) return false;
   return !Number.isFinite(parseAmount(raw));
 }
 
+// крестик очистки суммы
+function syncAmountClear() {
+  if (!els.amountClear) return;
+  els.amountClear.hidden = String(els.amount.value).length === 0;
+}
+
+// цели без базовой валюты (база не дублируется в списке результатов)
 function visibleTargets() {
   return state.targets.filter((code) => code !== state.base);
 }
@@ -90,6 +124,53 @@ function getFocusable(container) {
   );
 }
 
+// абсолютные URL для OG/canonical/JSON-LD
+function siteBaseUrl() {
+  const path = window.location.pathname.replace(/index\.html$/i, '');
+  const base = path.endsWith('/') ? path : `${path}/`;
+  return `${window.location.origin}${base}`;
+}
+
+function syncSeoUrls() {
+  const base = siteBaseUrl();
+  const image = new URL('icons/icon-512.png', base).href;
+  const canonical = document.getElementById('seo-canonical');
+  const ogUrl = document.getElementById('seo-og-url');
+  const ogImage = document.getElementById('seo-og-image');
+  const twImage = document.getElementById('seo-twitter-image');
+  if (canonical) canonical.href = base;
+  if (ogUrl) ogUrl.setAttribute('content', base);
+  if (ogImage) ogImage.setAttribute('content', image);
+  if (twImage) twImage.setAttribute('content', image);
+
+  const jsonLd = document.getElementById('seo-jsonld');
+  if (jsonLd) {
+    try {
+      const data = JSON.parse(jsonLd.textContent);
+      data.url = base;
+      data.image = image;
+      data.description = t(state.locale, 'metaDescription');
+      data.inLanguage = state.locale;
+      jsonLd.textContent = JSON.stringify(data);
+    } catch {
+      // битый JSON-LD не трогаем
+    }
+  }
+}
+
+// индикаторы загрузки: refresh spinner, aria-busy, opacity списка
+function setLoadingUi(isLoading) {
+  loading = isLoading;
+  els.refreshBtn.disabled = isLoading;
+  els.refreshBtn.classList.toggle('is-busy', isLoading);
+  els.refreshBtn.setAttribute('aria-busy', isLoading ? 'true' : 'false');
+  const spin = els.refreshBtn.querySelector('.spinner');
+  if (spin) spin.hidden = !isLoading;
+  els.results.classList.toggle('is-loading', isLoading);
+  els.results.setAttribute('aria-busy', isLoading ? 'true' : 'false');
+}
+
+// применяет ?amount&from&to&locale&theme к state при старте
 function applyUrlToState() {
   const params = new URLSearchParams(window.location.search);
   const amount = params.get('amount');
@@ -101,7 +182,7 @@ function applyUrlToState() {
   const patch = {};
 
   if (amount != null && amount !== '') patch.amount = amount;
-  if (from && CURRENCIES.includes(from)) patch.base = from;
+  if (from && isCurrencyCode(from)) patch.base = from;
   if (locale === 'ru' || locale === 'en') patch.locale = locale;
   if (theme === 'light' || theme === 'dark' || theme === 'system') {
     patch.theme = theme;
@@ -111,9 +192,10 @@ function applyUrlToState() {
     const codes = to
       .split(',')
       .map((c) => c.trim().toUpperCase())
-      .filter((c) => CURRENCIES.includes(c));
+      .filter((c) => isCurrencyCode(c));
     if (codes.length) {
       const base = patch.base || state.base;
+      // база всегда в targets, даже если её не было в to=
       patch.targets = [...new Set([base, ...codes])];
     }
   }
@@ -123,6 +205,7 @@ function applyUrlToState() {
   }
 }
 
+// пишет текущий state в URL без добавления истории
 function syncUrlFromState() {
   if (syncingUrl) return;
   const params = new URLSearchParams();
@@ -142,10 +225,27 @@ function syncUrlFromState() {
   }
 }
 
+// проставляет тексты/aria/placeholder по data-i18n* и опции темы
 function renderI18n() {
   const locale = state.locale;
   document.documentElement.lang = locale;
   document.title = `${t(locale, 'appName')} — ${t(locale, 'tagline')}`;
+
+  const description = t(locale, 'metaDescription');
+  const metaDesc = document.querySelector('meta[name="description"]');
+  if (metaDesc) metaDesc.setAttribute('content', description);
+  const ogDesc = document.querySelector('meta[property="og:description"]');
+  if (ogDesc) ogDesc.setAttribute('content', description);
+  const twDesc = document.querySelector('meta[name="twitter:description"]');
+  if (twDesc) twDesc.setAttribute('content', description);
+  const ogLocale = document.getElementById('seo-og-locale');
+  if (ogLocale) {
+    ogLocale.setAttribute('content', locale === 'ru' ? 'ru_RU' : 'en_US');
+  }
+  const ogAlt = document.querySelector('meta[property="og:locale:alternate"]');
+  if (ogAlt) {
+    ogAlt.setAttribute('content', locale === 'ru' ? 'en_US' : 'ru_RU');
+  }
 
   for (const el of document.querySelectorAll('[data-i18n]')) {
     el.textContent = t(locale, el.dataset.i18n);
@@ -169,21 +269,57 @@ function renderI18n() {
       }[option.value],
     );
   }
+
+  syncSeoUrls();
 }
 
+// заполняет <select#base> кодами из API/seed
 function fillBaseSelect() {
   const previous = state.base;
-  els.base.innerHTML = CURRENCIES.map((code) => {
-    const label = `${code} — ${currencyName(state.locale, code)}`;
-    return `<option value="${code}">${label}</option>`;
-  }).join('');
-  els.base.value = CURRENCIES.includes(previous) ? previous : 'USD';
+  let codes = availableCodes();
+  if (previous && !codes.includes(previous)) {
+    codes = [...codes, previous].sort();
+  }
+  els.base.innerHTML = codes
+    .map((code) => {
+      const label = `${code} — ${currencyName(state.locale, code)}`;
+      return `<option value="${code}">${label}</option>`;
+    })
+    .join('');
+  els.base.value = codes.includes(previous) ? previous : codes[0] || 'USD';
+  syncBaseFlag();
 }
 
+// картинка флага рядом с select базы (в <option> img нельзя)
+function syncBaseFlag() {
+  if (!els.baseFlag) return;
+  const src = flagUrl(els.base.value || state.base);
+  if (!src) {
+    els.baseFlag.hidden = true;
+    els.baseFlag.replaceChildren();
+    return;
+  }
+  els.baseFlag.hidden = false;
+  let img = els.baseFlag.querySelector('img');
+  if (!img) {
+    img = document.createElement('img');
+    img.alt = '';
+    img.width = 20;
+    img.height = 15;
+    img.decoding = 'async';
+    img.addEventListener('error', () => {
+      els.baseFlag.hidden = true;
+    });
+    els.baseFlag.appendChild(img);
+  }
+  if (img.getAttribute('src') !== src) img.src = src;
+}
+
+// чекбоксы + стрелки порядка в панели manage
 function renderManageList() {
   const selected = new Set(state.targets);
   const query = manageQuery.trim().toLowerCase();
-  const codes = CURRENCIES.filter((code) => {
+  const codes = availableCodes().filter((code) => {
     if (!query) return true;
     const name = currencyName(state.locale, code).toLowerCase();
     return code.toLowerCase().includes(query) || name.includes(query);
@@ -211,6 +347,7 @@ function renderManageList() {
       <div class="manage-item ${disabled ? 'is-disabled' : ''}">
         <label class="manage-item-main">
           <input type="checkbox" value="${code}" ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''} />
+          ${flagMarkup(code)}
           <span class="manage-code">${code}</span>
           <span class="manage-name">${name}</span>
         </label>
@@ -228,10 +365,12 @@ function renderManageList() {
     .join('');
 }
 
+// строки результатов: сумма, unit rate, drag-handle, copy
 function renderResults() {
   const amount = parseAmount(els.amount.value);
   const targets = visibleTargets();
   els.results.classList.toggle('is-loading', loading);
+  els.results.setAttribute('aria-busy', loading ? 'true' : 'false');
 
   if (!targets.length) {
     els.results.innerHTML = `<li class="result-empty">${t(state.locale, 'manageHint')}</li>`;
@@ -271,7 +410,10 @@ function renderResults() {
           </svg>
         </button>
         <div class="result-meta">
-          <span class="result-code">${code}</span>
+          <span class="result-heading">
+            ${flagMarkup(code)}
+            <span class="result-code">${code}</span>
+          </span>
           <span class="result-name">${name}</span>
           ${rateText ? `<span class="result-rate">${rateText}</span>` : ''}
         </div>
@@ -290,6 +432,7 @@ function renderResults() {
     .join('');
 }
 
+// статусная строка: ошибка суммы / loading / кэш / свежий курс
 function renderStatus() {
   if (amountIsInvalid()) {
     els.status.textContent = t(state.locale, 'invalidAmount');
@@ -298,7 +441,7 @@ function renderStatus() {
   }
 
   if (loading) {
-    els.status.textContent = t(state.locale, 'ratesLoading');
+    els.status.innerHTML = `<span class="spinner spinner-inline" aria-hidden="true"></span><span>${t(state.locale, 'ratesLoading')}</span>`;
     els.status.dataset.tone = 'muted';
     return;
   }
@@ -330,10 +473,13 @@ function renderAll() {
   renderManageList();
   renderResults();
   renderStatus();
+  syncAmountClear();
   els.refreshBtn.disabled = loading;
   els.swapBtn.disabled = visibleTargets().length === 0;
 }
 
+// загрузка курсов для base
+// свежий кэш — без сети; иначе stale-while-revalidate + force
 async function loadRates(base = state.base, { force = false } = {}) {
   if (ratesAbort) ratesAbort.abort();
   ratesAbort = new AbortController();
@@ -347,26 +493,30 @@ async function loadRates(base = state.base, { force = false } = {}) {
     ratesPayload = cached;
     usingCache = false;
     cacheStale = false;
-    loading = false;
+    setLoadingUi(false);
+    fillBaseSelect();
+    renderManageList();
     renderResults();
     renderStatus();
     return;
   }
 
+  // сразу показываем кэш, пока идёт сеть
   if (cached?.rates) {
     ratesPayload = cached;
     usingCache = true;
     cacheStale = stale;
+    fillBaseSelect();
+    renderManageList();
     renderResults();
   }
 
-  loading = true;
-  els.refreshBtn.disabled = true;
-  els.results.classList.add('is-loading');
+  setLoadingUi(true);
   renderStatus();
 
   try {
     const payload = await fetchRates(requestBase, { signal });
+    // устаревший ответ (смена базы / abort) игнорируем
     if (signal.aborted || requestBase !== state.base) return;
 
     ratesPayload = payload;
@@ -386,9 +536,9 @@ async function loadRates(base = state.base, { force = false } = {}) {
     }
   } finally {
     if (!signal.aborted) {
-      loading = false;
-      els.refreshBtn.disabled = false;
-      els.results.classList.remove('is-loading');
+      setLoadingUi(false);
+      fillBaseSelect();
+      renderManageList();
       renderResults();
       renderStatus();
     }
@@ -397,19 +547,31 @@ async function loadRates(base = state.base, { force = false } = {}) {
 
 function onAmountInput() {
   persist({ amount: els.amount.value });
+  syncAmountClear();
   renderResults();
   renderStatus();
 }
 
+function onAmountClear() {
+  els.amount.value = '';
+  persist({ amount: '' });
+  syncAmountClear();
+  renderResults();
+  renderStatus();
+  els.amount.focus();
+}
+
+// смена базы: база в targets, fallback-цель, force reload
 async function onBaseChange() {
   const base = els.base.value;
+  syncBaseFlag();
   let targets = state.targets.includes(base)
     ? [...state.targets]
     : [...state.targets, base];
 
   const others = targets.filter((c) => c !== base);
   if (!others.length) {
-    const fallback = CURRENCIES.find((c) => c !== base);
+    const fallback = availableCodes().find((c) => c !== base);
     if (fallback) targets.push(fallback);
   }
 
@@ -430,6 +592,7 @@ function onLocaleChange() {
   renderAll();
 }
 
+// чекбокс валюты; нельзя снять последнюю цель кроме базы
 function onManageChange(event) {
   const input = event.target;
   if (!(input instanceof HTMLInputElement) || input.type !== 'checkbox') return;
@@ -455,6 +618,7 @@ function onManageChange(event) {
   els.swapBtn.disabled = visibleTargets().length === 0;
 }
 
+// переставляет visibleTargets; база остаётся в начале Set
 function reorderTargets(fromIndex, toIndex) {
   const others = visibleTargets();
   if (
@@ -474,6 +638,7 @@ function reorderTargets(fromIndex, toIndex) {
   return true;
 }
 
+// порядок строк результатов из DOM → state.targets
 function persistVisibleOrderFromDom() {
   const codes = [...els.results.querySelectorAll('.result-row')]
     .map((row) => row.dataset.code)
@@ -509,7 +674,7 @@ function endResultsDrag(event) {
   try {
     handle?.releasePointerCapture?.(event.pointerId);
   } catch {
-    /* уже отпущен */
+    // уже отпущен
   }
 
   row.classList.remove('is-dragging');
@@ -549,6 +714,7 @@ function onResultsPointerDown(event) {
   document.addEventListener('pointercancel', endResultsDrag);
 }
 
+// после порога — live insertBefore по половине высоты соседа
 function onResultsPointerMove(event) {
   if (!resultsDrag || event.pointerId !== resultsDrag.pointerId) return;
 
@@ -580,12 +746,14 @@ function onManageListClick(event) {
   moveTarget(btn.dataset.code, btn.dataset.move);
 }
 
+// открытие/закрытие bottom-sheet manage + restore focus
 function setManageOpen(open) {
   if (open) {
     manageReturnFocus = document.activeElement;
     els.managePanel.hidden = false;
     els.openManageBtn.setAttribute('aria-expanded', 'true');
     document.body.classList.add('manage-open');
+    els.shell?.setAttribute('inert', '');
     manageQuery = '';
     els.manageSearch.value = '';
     renderManageList();
@@ -594,6 +762,7 @@ function setManageOpen(open) {
     els.managePanel.hidden = true;
     els.openManageBtn.setAttribute('aria-expanded', 'false');
     document.body.classList.remove('manage-open');
+    els.shell?.removeAttribute('inert');
     const restore = manageReturnFocus || els.openManageBtn;
     manageReturnFocus = null;
     restore?.focus?.();
@@ -611,6 +780,7 @@ function onManageBackdropClick(event) {
   }
 }
 
+// Escape закрывает; Tab циклит фокус внутри sheet
 function onManageKeydown(event) {
   if (els.managePanel.hidden) return;
 
@@ -640,6 +810,7 @@ async function onRefresh() {
   await loadRates(state.base, { force: true });
 }
 
+// база ↔ первая цель в списке
 async function onSwap() {
   const targets = visibleTargets();
   if (!targets.length) return;
@@ -656,6 +827,7 @@ async function onSwap() {
   await loadRates(nextBase, { force: true });
 }
 
+// Clipboard API с fallback через textarea + execCommand
 async function copyText(text, button) {
   if (!text || text === t(state.locale, 'emptyAmount')) return;
 
@@ -698,13 +870,16 @@ function onResultsClick(event) {
   copyText(text, btn || null);
 }
 
+// начальные значения контролов и все слушатели
 function initControls() {
   els.amount.value = state.amount;
   els.theme.value = state.theme;
   els.locale.value = state.locale;
   applyTheme(state.theme);
+  syncAmountClear();
 
   els.amount.addEventListener('input', onAmountInput);
+  els.amountClear?.addEventListener('click', onAmountClear);
   els.base.addEventListener('change', onBaseChange);
   els.theme.addEventListener('change', onThemeChange);
   els.locale.addEventListener('change', onLocaleChange);
@@ -732,6 +907,7 @@ function registerSw() {
   });
 }
 
+// —— bootstrap ——
 applyUrlToState();
 initControls();
 renderAll();

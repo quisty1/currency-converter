@@ -1,8 +1,10 @@
+// базовый URL Open Exchange Rates API (v6 latest)
 const API_BASE = 'https://open.er-api.com/v6/latest';
 
-/** кэш старше 6 часов считаем устаревшим */
+// кэш старше 6 часов считаем устаревшим
 export const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 
+// seed до первой загрузки курсов / без кэша
 export const CURRENCIES = [
   'USD',
   'EUR',
@@ -38,6 +40,20 @@ export const CURRENCIES = [
   'ILS',
 ];
 
+// коды из ответа API; без rates — seed
+export function currencyCodesFromRates(ratesPayload) {
+  if (!ratesPayload?.rates) return [...CURRENCIES];
+  const codes = new Set(Object.keys(ratesPayload.rates));
+  if (ratesPayload.base) codes.add(String(ratesPayload.base).toUpperCase());
+  return [...codes].sort();
+}
+
+// ISO 4217: ровно три латинские буквы
+export function isCurrencyCode(code) {
+  return typeof code === 'string' && /^[A-Z]{3}$/.test(code);
+}
+
+// пауза с поддержкой AbortSignal (для backoff между ретраями)
 function sleep(ms, signal) {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
@@ -53,11 +69,14 @@ function sleep(ms, signal) {
   });
 }
 
+// true, если нет кэша или fetchedAt старше TTL
 export function isCacheStale(cache, ttlMs = CACHE_TTL_MS) {
   if (!cache?.rates || !cache.fetchedAt) return true;
   return Date.now() - cache.fetchedAt > ttlMs;
 }
 
+// загрузка курсов относительно base
+// ретраи с экспоненциальной паузой; AbortError пробрасывается сразу
 export async function fetchRates(base, { signal, retries = 2 } = {}) {
   const code = String(base || 'USD').toUpperCase();
   let lastError;
@@ -86,6 +105,7 @@ export async function fetchRates(base, { signal, retries = 2 } = {}) {
       if (error?.name === 'AbortError') throw error;
       lastError = error;
       if (attempt < retries) {
+        // 300ms, 600ms, …
         await sleep(300 * 2 ** attempt, signal);
       }
     }
@@ -94,6 +114,8 @@ export async function fetchRates(base, { signal, retries = 2 } = {}) {
   throw lastError;
 }
 
+// конвертация amount из from в to по ratesPayload
+// при совпадении базы кэша — прямой курс, иначе кросс-курс
 export function convert(amount, from, to, ratesPayload) {
   if (!ratesPayload?.rates) return null;
   if (!Number.isFinite(amount)) return null;
@@ -116,7 +138,7 @@ export function convert(amount, from, to, ratesPayload) {
   return (amount / fromRate) * toRate;
 }
 
-/** курс 1 единицы from в to */
+// курс 1 единицы from в to
 export function unitRate(from, to, ratesPayload) {
   return convert(1, from, to, ratesPayload);
 }
