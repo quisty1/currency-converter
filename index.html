@@ -173,11 +173,30 @@
             </label>
 
             <div class="base-row">
-              <label class="field convert-base">
+              <label class="field convert-base" for="base-input">
                 <span data-i18n="baseLabel">Из валюты</span>
                 <div class="base-select-wrap">
-                  <span id="base-flag" class="flag" aria-hidden="true"></span>
-                  <select id="base"></select>
+                  <div class="base-combobox">
+                    <span id="base-flag" class="flag" aria-hidden="true"></span>
+                    <input type="hidden" id="base" value="" />
+                    <input
+                      type="text"
+                      id="base-input"
+                      role="combobox"
+                      autocomplete="off"
+                      spellcheck="false"
+                      aria-autocomplete="list"
+                      aria-expanded="false"
+                      aria-controls="base-listbox"
+                      aria-haspopup="listbox"
+                    />
+                  </div>
+                  <ul
+                    id="base-listbox"
+                    class="base-listbox"
+                    role="listbox"
+                    hidden
+                  ></ul>
                 </div>
               </label>
               <button

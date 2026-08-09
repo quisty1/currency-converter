@@ -46,6 +46,8 @@ const els = {
   amount: document.getElementById('amount'),
   amountClear: document.getElementById('amount-clear'),
   base: document.getElementById('base'),
+  baseInput: document.getElementById('base-input'),
+  baseListbox: document.getElementById('base-listbox'),
   baseFlag: document.getElementById('base-flag'),
   results: document.getElementById('results'),
   status: document.getElementById('status'),
@@ -77,6 +79,13 @@ let loading = false;
 let manageQuery = '';
 // вкладка модалки: фиат | крипто
 let manageTab = 'fiat';
+// combobox FROM: запрос, открыт ли список, индекс активной опции
+let baseQuery = '';
+let baseOpen = false;
+let baseActiveIndex = -1;
+// кэш кодов для listbox (фиат / крипто)
+let baseFiatCodes = [];
+let baseCryptoCodes = [];
 // AbortController текущего fetchRates
 let ratesAbort = null;
 // куда вернуть фокус после закрытия manage
@@ -292,7 +301,17 @@ function renderI18n() {
   syncSeoUrls();
 }
 
-// заполняет <select#base> optgroup фиат / крипто
+function baseDisplayLabel(code) {
+  return `${code} — ${nameOf(code)}`;
+}
+
+function syncBaseInputDisplay() {
+  if (!els.baseInput) return;
+  const code = els.base.value || state.base;
+  els.baseInput.value = code ? baseDisplayLabel(code) : '';
+}
+
+// кэш кодов + значение скрытого #base + подпись инпута
 function fillBaseSelect() {
   const previous = state.base;
   const payload = ratesPayload || state.ratesCache;
@@ -304,38 +323,208 @@ function fillBaseSelect() {
     fiat = [...fiat, previous].sort();
   }
 
-  const fiatOpts = fiat
-    .map((code) => {
-      const label = `${code} — ${nameOf(code)}`;
-      return `<option value="${code}">${label}</option>`;
-    })
-    .join('');
-  const cryptoOpts = crypto
-    .map((code) => {
-      const label = `${code} — ${nameOf(code)}`;
-      return `<option value="${code}">${label}</option>`;
-    })
-    .join('');
-
-  const parts = [];
-  if (fiatOpts) {
-    parts.push(
-      `<optgroup label="${t(state.locale, 'groupFiat')}">${fiatOpts}</optgroup>`,
-    );
-  }
-  if (cryptoOpts) {
-    parts.push(
-      `<optgroup label="${t(state.locale, 'groupCrypto')}">${cryptoOpts}</optgroup>`,
-    );
-  }
-  els.base.innerHTML = parts.join('');
+  baseFiatCodes = fiat;
+  baseCryptoCodes = crypto;
 
   const all = [...fiat, ...crypto];
   els.base.value = all.includes(previous) ? previous : all[0] || 'USD';
+  syncBaseInputDisplay();
   syncBaseFlag();
+  if (baseOpen) renderBaseList(baseQuery);
 }
 
-// картинка флага/иконки рядом с select базы
+function visibleBaseOptions(query) {
+  const q = query.trim().toLowerCase();
+  const match = (code) => {
+    if (!q) return true;
+    const name = nameOf(code).toLowerCase();
+    return code.toLowerCase().includes(q) || name.includes(q);
+  };
+  return {
+    fiat: baseFiatCodes.filter(match),
+    crypto: baseCryptoCodes.filter(match),
+  };
+}
+
+function flatBaseOptions(query) {
+  const { fiat, crypto } = visibleBaseOptions(query);
+  return [...fiat, ...crypto];
+}
+
+function setBaseActiveIndex(index) {
+  if (!els.baseListbox) return;
+  const options = els.baseListbox.querySelectorAll('[role="option"]');
+  baseActiveIndex = index;
+  options.forEach((el, i) => {
+    const active = i === index;
+    el.classList.toggle('is-active', active);
+    if (active) {
+      els.baseInput?.setAttribute('aria-activedescendant', el.id);
+      el.scrollIntoView({ block: 'nearest' });
+    }
+  });
+  if (index < 0) els.baseInput?.removeAttribute('aria-activedescendant');
+}
+
+function renderBaseList(query = baseQuery) {
+  if (!els.baseListbox) return;
+  const meta = currentCryptoMeta();
+  const { fiat, crypto } = visibleBaseOptions(query);
+  const selected = els.base.value || state.base;
+  const parts = [];
+  let optIndex = 0;
+
+  const pushGroup = (label, codes) => {
+    if (!codes.length) return;
+    parts.push(
+      `<li class="base-listbox-group" role="presentation">${label}</li>`,
+    );
+    for (const code of codes) {
+      const id = `base-option-${optIndex}`;
+      const isSelected = code === selected;
+      parts.push(`
+        <li
+          id="${id}"
+          class="base-listbox-option${isSelected ? ' is-selected' : ''}"
+          role="option"
+          data-code="${code}"
+          aria-selected="${isSelected ? 'true' : 'false'}"
+        >
+          ${assetMarkup(code, meta)}
+          <span class="base-option-code">${code}</span>
+          <span class="base-option-name">${nameOf(code)}</span>
+        </li>
+      `);
+      optIndex += 1;
+    }
+  };
+
+  pushGroup(t(state.locale, 'groupFiat'), fiat);
+  pushGroup(t(state.locale, 'groupCrypto'), crypto);
+
+  if (!optIndex) {
+    els.baseListbox.innerHTML = `<li class="base-listbox-empty" role="presentation">${t(state.locale, 'searchEmpty')}</li>`;
+    setBaseActiveIndex(-1);
+    return;
+  }
+
+  els.baseListbox.innerHTML = parts.join('');
+  const flat = [...fiat, ...crypto];
+  const selectedIdx = flat.indexOf(selected);
+  setBaseActiveIndex(selectedIdx >= 0 ? selectedIdx : 0);
+}
+
+function openBaseListbox({ selectText = false } = {}) {
+  if (!els.baseListbox || !els.baseInput) return;
+  baseOpen = true;
+  els.baseListbox.hidden = false;
+  els.baseInput.setAttribute('aria-expanded', 'true');
+  renderBaseList(baseQuery);
+  if (selectText) els.baseInput.select();
+}
+
+function closeBaseListbox({ restore = true } = {}) {
+  if (!els.baseListbox || !els.baseInput) return;
+  baseOpen = false;
+  baseQuery = '';
+  baseActiveIndex = -1;
+  els.baseListbox.hidden = true;
+  els.baseListbox.innerHTML = '';
+  els.baseInput.setAttribute('aria-expanded', 'false');
+  els.baseInput.removeAttribute('aria-activedescendant');
+  if (restore) syncBaseInputDisplay();
+}
+
+async function selectBaseCode(code) {
+  if (!code || code === els.base.value) {
+    closeBaseListbox({ restore: true });
+    return;
+  }
+  els.base.value = code;
+  baseQuery = '';
+  syncBaseInputDisplay();
+  closeBaseListbox({ restore: false });
+  await onBaseChange();
+}
+
+function onBaseInputFocus() {
+  baseQuery = '';
+  openBaseListbox({ selectText: true });
+}
+
+function onBaseInputInput() {
+  baseQuery = els.baseInput.value;
+  if (!baseOpen) openBaseListbox();
+  else renderBaseList(baseQuery);
+}
+
+function onBaseInputKeydown(event) {
+  const flat = flatBaseOptions(baseQuery);
+
+  if (event.key === 'ArrowDown') {
+    event.preventDefault();
+    if (!baseOpen) {
+      openBaseListbox();
+      return;
+    }
+    const next = baseActiveIndex < flat.length - 1 ? baseActiveIndex + 1 : 0;
+    setBaseActiveIndex(next);
+    return;
+  }
+
+  if (event.key === 'ArrowUp') {
+    event.preventDefault();
+    if (!baseOpen) {
+      openBaseListbox();
+      return;
+    }
+    const next = baseActiveIndex > 0 ? baseActiveIndex - 1 : flat.length - 1;
+    setBaseActiveIndex(next);
+    return;
+  }
+
+  if (event.key === 'Enter') {
+    if (!baseOpen) return;
+    event.preventDefault();
+    const code = flat[baseActiveIndex];
+    if (code) void selectBaseCode(code);
+    return;
+  }
+
+  if (event.key === 'Escape') {
+    if (!baseOpen) return;
+    event.preventDefault();
+    closeBaseListbox({ restore: true });
+    els.baseInput.blur();
+  }
+}
+
+function onBaseListboxClick(event) {
+  const option = event.target.closest('[role="option"][data-code]');
+  if (!option) return;
+  event.preventDefault();
+  void selectBaseCode(option.dataset.code);
+}
+
+function onBaseComboboxBlur() {
+  // клик по option снимает focus до click — отложить закрытие
+  requestAnimationFrame(() => {
+    const active = document.activeElement;
+    if (active === els.baseInput || els.baseListbox?.contains(active)) {
+      return;
+    }
+    closeBaseListbox({ restore: true });
+  });
+}
+
+function onDocumentPointerDownBase(event) {
+  if (!baseOpen) return;
+  const wrap = els.baseInput?.closest('.base-select-wrap');
+  if (wrap?.contains(event.target)) return;
+  closeBaseListbox({ restore: true });
+}
+
+// картинка флага/иконки рядом с combobox базы
 function syncBaseFlag() {
   if (!els.baseFlag) return;
   const code = els.base.value || state.base;
@@ -1043,7 +1232,16 @@ function initControls() {
 
   els.amount.addEventListener('input', onAmountInput);
   els.amountClear?.addEventListener('click', onAmountClear);
-  els.base.addEventListener('change', onBaseChange);
+  els.baseInput?.addEventListener('focus', onBaseInputFocus);
+  els.baseInput?.addEventListener('input', onBaseInputInput);
+  els.baseInput?.addEventListener('keydown', onBaseInputKeydown);
+  els.baseInput?.addEventListener('blur', onBaseComboboxBlur);
+  els.baseListbox?.addEventListener('mousedown', (event) => {
+    // не даём input потерять фокус до click по option
+    event.preventDefault();
+  });
+  els.baseListbox?.addEventListener('click', onBaseListboxClick);
+  document.addEventListener('pointerdown', onDocumentPointerDownBase);
   els.theme.addEventListener('change', onThemeChange);
   els.locale.addEventListener('change', onLocaleChange);
   els.manageList.addEventListener('change', onManageChange);
