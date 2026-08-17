@@ -1,5 +1,5 @@
-// ISO 4217 → ISO 3166-1 alpha-2 (или EU для евро)
-// null — нет флага (металлы, корзины, спецкоды)
+// ISO 4217 → ISO 3166-1 alpha-2 (or EU for euro)
+// null — no flag (metals, baskets, special codes)
 const CURRENCY_COUNTRY = {
   USD: 'US',
   EUR: 'EU',
@@ -166,40 +166,40 @@ const CURRENCY_COUNTRY = {
   XDR: null,
 };
 
-// ISO 4217 → страна или null
+// ISO 4217 → country or null
 export function currencyCountry(code) {
   const upper = String(code || '').toUpperCase();
   if (!upper) return null;
   if (Object.prototype.hasOwnProperty.call(CURRENCY_COUNTRY, upper)) {
     return CURRENCY_COUNTRY[upper];
   }
-  // спецкоды IMF / металлы / тесты
+  // IMF / metal / test special codes
   if (upper.startsWith('X')) return null;
   return null;
 }
 
-// alpha-2 → URL PNG-флага (flagcdn; на Windows emoji-флаги = буквы)
+// alpha-2 → PNG flag URL (flagcdn; Windows emoji flags render as letters)
 export function flagUrl(code) {
   const country = currencyCountry(code);
   if (!country || country.length !== 2) return '';
   return `https://flagcdn.com/w40/${country.toLowerCase()}.png`;
 }
 
-// разметка флага-картинки для списков; пустая строка если флага нет
+// flag image markup for lists; empty string if there is no flag
 export function flagMarkup(code) {
   const src = flagUrl(code);
   if (!src) return '';
   return `<span class="flag" aria-hidden="true"><img src="${src}" alt="" width="20" height="15" loading="lazy" decoding="async" onerror="this.closest('.flag')?.remove()" /></span>`;
 }
 
-// URL иконки крипты из cryptoMeta
+// crypto icon URL from cryptoMeta
 export function cryptoIconUrl(code, cryptoMeta) {
   const upper = String(code || '').toUpperCase();
   const src = cryptoMeta?.[upper]?.image;
   return typeof src === 'string' && src ? src : '';
 }
 
-// флаг для фиата, круглая иконка для крипты, иначе пусто
+// flag for fiat, round icon for crypto, otherwise empty
 export function assetMarkup(code, cryptoMeta = null) {
   const cryptoSrc = cryptoIconUrl(code, cryptoMeta);
   if (cryptoSrc) {
@@ -209,7 +209,7 @@ export function assetMarkup(code, cryptoMeta = null) {
   return flagMarkup(code);
 }
 
-// URL картинки актива для base-flag (крипта или флаг)
+// asset image URL for the base-flag (crypto or flag)
 export function assetUrl(code, cryptoMeta = null) {
   return cryptoIconUrl(code, cryptoMeta) || flagUrl(code);
 }

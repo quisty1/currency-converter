@@ -1,7 +1,7 @@
-// имя Cache Storage; bump при смене списка ассетов
+// Cache Storage name; bump when the asset list changes
 const CACHE = 'fx-multi-v3';
 
-// shell приложения для offline (без API курсов)
+// app shell for offline (no rates API)
 const ASSETS = [
   './',
   './index.html',
@@ -21,7 +21,7 @@ const ASSETS = [
   './sitemap.xml',
 ];
 
-// precache + skipWaiting, чтобы новый SW активировался сразу
+// precache + skipWaiting so the new SW activates immediately
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches
@@ -31,7 +31,7 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// удаляет старые кэши и забирает клиентов
+// drop old caches and take over clients
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches
@@ -45,14 +45,14 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// GET same-origin: network-first, кэш только как offline fallback
-// open.er-api.com / api.coingecko.com не трогаем — курсы в localStorage
+// GET same-origin: network-first; cache is offline fallback only
+// leave open.er-api.com / api.coingecko.com alone — rates live in localStorage
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return;
 
   const url = new URL(request.url);
-  // API курсов не кэшируем SW — остаётся localStorage в приложении
+  // do not cache the rates API in the SW — the app uses localStorage
   if (
     url.hostname === 'open.er-api.com' ||
     url.hostname === 'api.coingecko.com' ||

@@ -11,7 +11,7 @@
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --accent: #d61f26;
   --accent-ink: #ffffff;
-  /* двойное кольцо: фон + акцент, чтобы фокус читался на любом фоне */
+  /* double ring: bg + accent so focus reads on any background */
   --focus-ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
 }
 
@@ -70,7 +70,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* skip-link: виден только при фокусе с клавиатуры */
+/* skip-link: visible only on keyboard focus */
 .skip-link {
   position: absolute;
   top: 0;
@@ -92,7 +92,7 @@ body {
   box-shadow: var(--focus-ring);
 }
 
-/* декоративная сетка под контентом */
+/* decorative grid behind content */
 .bg {
   position: fixed;
   inset: 0;
@@ -184,7 +184,7 @@ body {
     background-color 0.18s var(--ease);
 }
 
-/* кастомная стрелка select вместо нативной */
+/* custom select arrow instead of the native one */
 .field select {
   -webkit-appearance: none;
   -moz-appearance: none;
@@ -239,7 +239,7 @@ html[data-theme='dark'] .field select {
   gap: 1.1rem;
 }
 
-/* крупное поле суммы без «карточки» */
+/* large amount field without card chrome */
 .amount-wrap {
   position: relative;
   display: block;
@@ -626,12 +626,12 @@ html[data-theme='dark'] .base-combobox #base-input {
   cursor: pointer;
 }
 
-/* во время drag отключаем staggered row-in */
+/* disable staggered row-in while dragging */
 .results.is-reordering .result-row {
   animation: none;
 }
 
-/* pointer-events: none — elementFromPoint видит соседа под курсором */
+/* pointer-events: none so elementFromPoint sees the row under the cursor */
 .result-row.is-dragging {
   opacity: 0.55;
   position: relative;
@@ -651,7 +651,7 @@ html[data-theme='dark'] .base-combobox #base-input {
   background: transparent;
   color: var(--muted);
   cursor: grab;
-  /* не даём браузеру скроллить вместо drag */
+  /* keep the browser from scrolling instead of dragging */
   touch-action: none;
   opacity: 0.55;
   transition:
@@ -671,7 +671,7 @@ html[data-theme='dark'] .base-combobox #base-input {
   color: var(--ink);
 }
 
-/* staggered появление строк */
+/* staggered row appear */
 .result-row:nth-child(1) {
   animation-delay: 0.02s;
 }
@@ -846,7 +846,7 @@ html[data-theme='dark'] .base-combobox #base-input {
   animation: fade 0.18s var(--ease);
 }
 
-/* [hidden] иначе перебивается display: grid */
+/* [hidden] otherwise display: grid wins */
 .manage[hidden] {
   display: none !important;
 }
@@ -981,7 +981,7 @@ html[data-theme='dark'] .base-combobox #base-input {
   color: var(--accent);
 }
 
-/* база в списке: нельзя снять чекбокс */
+/* base currency in the list: checkbox cannot be unchecked */
 .manage-item.is-disabled .manage-item-main {
   opacity: 0.4;
   cursor: not-allowed;
@@ -1066,7 +1066,7 @@ html[data-theme='dark'] .base-combobox #base-input {
   border: 0;
 }
 
-/* блокируем скролл страницы под оверлеем */
+/* lock page scroll under the overlay */
 body.manage-open {
   overflow: hidden;
 }
@@ -1159,7 +1159,7 @@ body.manage-open {
     gap: 1.5rem;
   }
 
-  /* на desktop sheet по центру, не bottom */
+  /* on desktop, center the sheet instead of docking to the bottom */
   .manage {
     align-items: center;
     justify-items: center;

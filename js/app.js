@@ -1,5 +1,5 @@
-// точка входа UI: конвертация, управление списком валют,
-// тема/локаль, URL sync, drag-reorder, PWA SW
+// UI entry: conversion, currency list,
+// theme/locale, URL sync, drag-reorder, PWA SW
 import {
   convert,
   cryptoCodes,
@@ -25,11 +25,11 @@ import {
 import { loadState, saveState } from './storage.js';
 import { applyTheme, watchSystemTheme } from './theme.js';
 
-// селектор фокусируемых элементов внутри manage-sheet (trap Tab)
+// focusable elements inside the manage sheet (Tab trap)
 const FOCUSABLE =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-// кэш DOM-ссылок; i18n-элементы + интерактивные контролы
+// cached DOM refs; i18n nodes + interactive controls
 const els = {
   amountLabel: document.querySelector('[data-i18n="amountLabel"]'),
   baseLabel: document.querySelector('[data-i18n="baseLabel"]'),
@@ -68,38 +68,38 @@ const els = {
 };
 
 let state = loadState();
-// актуальный payload курсов (живой или из кэша)
+// current rates payload (live or cached)
 let ratesPayload = state.ratesCache;
-// показали курсы из localStorage, сеть ещё не ответила / упала
+// showing rates from localStorage; network pending or failed
 let usingCache = false;
-// кэш старше TTL
+// cache older than TTL
 let cacheStale = false;
 let loading = false;
-// фильтр поиска в панели управления валютами
+// search filter in the currency manager
 let manageQuery = '';
-// вкладка модалки: фиат | крипто
+// modal tab: fiat | crypto
 let manageTab = 'fiat';
-// combobox FROM: запрос, открыт ли список, индекс активной опции
+// FROM combobox: query, open state, active option index
 let baseQuery = '';
 let baseOpen = false;
 let baseActiveIndex = -1;
-// кэш кодов для listbox (фиат / крипто)
+// cached codes for the listbox (fiat / crypto)
 let baseFiatCodes = [];
 let baseCryptoCodes = [];
-// AbortController текущего fetchRates
+// AbortController for the current fetchRates
 let ratesAbort = null;
-// куда вернуть фокус после закрытия manage
+// where to restore focus after closing manage
 let manageReturnFocus = null;
-// таймер сброса текста «Скопировано»
+// timer to reset the "Copied" button text
 let copyResetTimer = null;
-// защита от цикла replaceState ↔ popstate-логики
+// guard against a replaceState ↔ popstate loop
 let syncingUrl = false;
-// состояние pointer-drag строки результатов
+// pointer-drag state for a result row
 let resultsDrag = null;
-// после drag не срабатывает copy по click
+// after a drag, skip copy on the following click
 let suppressResultsCopy = false;
 
-// px до начала reorder (отсекает клик)
+// px before reorder starts (filters out a click)
 const DRAG_THRESHOLD = 6;
 
 function availableCodes() {
@@ -114,34 +114,34 @@ function nameOf(code) {
   return currencyName(state.locale, code, currentCryptoMeta());
 }
 
-// сохраняет partial и синхронизирует query string
+// save a partial and sync the query string
 function persist(partial) {
   state = saveState(state, partial);
   syncUrlFromState();
   return state;
 }
 
-// нормализует ввод: пробелы, запятая → точка
+// normalize input: spaces, comma → dot
 function parseAmount(raw) {
   const normalized = String(raw).trim().replace(/\s/g, '').replace(',', '.');
   if (!normalized) return NaN;
   return Number(normalized);
 }
 
-// пустое поле не ошибка; нечисло — ошибка
+// empty field is not an error; non-numeric is
 function amountIsInvalid() {
   const raw = String(els.amount.value).trim();
   if (!raw) return false;
   return !Number.isFinite(parseAmount(raw));
 }
 
-// крестик очистки суммы
+// amount clear button
 function syncAmountClear() {
   if (!els.amountClear) return;
   els.amountClear.hidden = String(els.amount.value).length === 0;
 }
 
-// цели без базовой валюты (база не дублируется в списке результатов)
+// targets excluding the base (base is not duplicated in results)
 function visibleTargets() {
   return state.targets.filter((code) => code !== state.base);
 }
@@ -152,7 +152,7 @@ function getFocusable(container) {
   );
 }
 
-// абсолютные URL для OG/canonical/JSON-LD
+// absolute URLs for OG/canonical/JSON-LD
 function siteBaseUrl() {
   const path = window.location.pathname.replace(/index\.html$/i, '');
   const base = path.endsWith('/') ? path : `${path}/`;
@@ -181,12 +181,12 @@ function syncSeoUrls() {
       data.inLanguage = state.locale;
       jsonLd.textContent = JSON.stringify(data);
     } catch {
-      // битый JSON-LD не трогаем
+      // leave broken JSON-LD alone
     }
   }
 }
 
-// индикаторы загрузки: refresh spinner, aria-busy, opacity списка
+// loading indicators: refresh spinner, aria-busy, list opacity
 function setLoadingUi(isLoading) {
   loading = isLoading;
   els.refreshBtn.disabled = isLoading;
@@ -198,7 +198,7 @@ function setLoadingUi(isLoading) {
   els.results.setAttribute('aria-busy', isLoading ? 'true' : 'false');
 }
 
-// применяет ?amount&from&to&locale&theme к state при старте
+// apply ?amount&from&to&locale&theme to state on startup
 function applyUrlToState() {
   const params = new URLSearchParams(window.location.search);
   const amount = params.get('amount');
@@ -223,7 +223,7 @@ function applyUrlToState() {
       .filter((c) => isCurrencyCode(c));
     if (codes.length) {
       const base = patch.base || state.base;
-      // база всегда в targets, даже если её не было в to=
+      // base always stays in targets, even if missing from to=
       patch.targets = [...new Set([base, ...codes])];
     }
   }
@@ -233,7 +233,7 @@ function applyUrlToState() {
   }
 }
 
-// пишет текущий state в URL без добавления истории
+// write current state to the URL without adding history
 function syncUrlFromState() {
   if (syncingUrl) return;
   const params = new URLSearchParams();
@@ -253,7 +253,7 @@ function syncUrlFromState() {
   }
 }
 
-// проставляет тексты/aria/placeholder по data-i18n* и опции темы
+// apply texts/aria/placeholders from data-i18n* and theme options
 function renderI18n() {
   const locale = state.locale;
   document.documentElement.lang = locale;
@@ -311,7 +311,7 @@ function syncBaseInputDisplay() {
   els.baseInput.value = code ? baseDisplayLabel(code) : '';
 }
 
-// кэш кодов + значение скрытого #base + подпись инпута
+// cached codes + hidden #base value + input label
 function fillBaseSelect() {
   const previous = state.base;
   const payload = ratesPayload || state.ratesCache;
@@ -319,7 +319,7 @@ function fillBaseSelect() {
   let crypto = cryptoCodes(payload);
 
   if (previous && !fiat.includes(previous) && !crypto.includes(previous)) {
-    // неизвестный код из state — в группу фиата
+    // unknown code from state goes in the fiat group
     fiat = [...fiat, previous].sort();
   }
 
@@ -507,7 +507,7 @@ function onBaseListboxClick(event) {
 }
 
 function onBaseComboboxBlur() {
-  // клик по option снимает focus до click — отложить закрытие
+  // clicking an option blurs before click — delay close
   requestAnimationFrame(() => {
     const active = document.activeElement;
     if (active === els.baseInput || els.baseListbox?.contains(active)) {
@@ -524,7 +524,7 @@ function onDocumentPointerDownBase(event) {
   closeBaseListbox({ restore: true });
 }
 
-// картинка флага/иконки рядом с combobox базы
+// flag/icon next to the base combobox
 function syncBaseFlag() {
   if (!els.baseFlag) return;
   const code = els.base.value || state.base;
@@ -572,7 +572,7 @@ function syncManageTabs() {
   }
 }
 
-// чекбоксы + стрелки порядка в панели manage (по вкладке)
+// checkboxes + reorder arrows in the manage panel (per tab)
 function renderManageList() {
   syncManageTabs();
   const selected = new Set(state.targets);
@@ -628,7 +628,7 @@ function renderManageList() {
     .join('');
 }
 
-// строки результатов: сумма, unit rate, drag-handle, copy
+// result rows: amount, unit rate, drag-handle, copy
 function renderResults() {
   const amount = parseAmount(els.amount.value);
   const targets = visibleTargets();
@@ -716,7 +716,7 @@ function renderResults() {
     .join('');
 }
 
-// статусная строка: ошибка суммы / loading / кэш / свежий курс
+// status line: amount error / loading / cache / fresh rates
 function renderStatus() {
   if (amountIsInvalid()) {
     els.status.textContent = t(state.locale, 'invalidAmount');
@@ -762,8 +762,8 @@ function renderAll() {
   els.swapBtn.disabled = visibleTargets().length === 0;
 }
 
-// загрузка курсов: фиат (USD) + крипта параллельно, merge
-// свежий кэш — без сети; иначе stale-while-revalidate + force
+// load rates: fiat (USD) + crypto in parallel, then merge
+// fresh cache skips the network; otherwise stale-while-revalidate + force
 async function loadRates(base = state.base, { force = false } = {}) {
   if (ratesAbort) ratesAbort.abort();
   ratesAbort = new AbortController();
@@ -773,7 +773,7 @@ async function loadRates(base = state.base, { force = false } = {}) {
   const cached = state.ratesCache;
   const stale = isCacheStale(cached);
 
-  // без cryptoMeta кэш неполный (старый фиат-only) — догружаем сеть
+  // cache without cryptoMeta is incomplete (old fiat-only) — fetch
   if (!force && cached?.rates && !stale && hasCryptoMeta(cached)) {
     ratesPayload = cached;
     usingCache = false;
@@ -786,7 +786,7 @@ async function loadRates(base = state.base, { force = false } = {}) {
     return;
   }
 
-  // сразу показываем кэш, пока идёт сеть
+  // show cache immediately while the network request runs
   if (cached?.rates) {
     ratesPayload = cached;
     usingCache = true;
@@ -800,7 +800,7 @@ async function loadRates(base = state.base, { force = false } = {}) {
   renderStatus();
 
   try {
-    // фиат всегда от USD (API не принимает крипту как base)
+    // fiat is always vs USD (API does not accept crypto as base)
     const [fiatResult, cryptoResult] = await Promise.allSettled([
       fetchRates('USD', { signal }),
       fetchCryptoMarkets({ signal }),
@@ -813,7 +813,7 @@ async function loadRates(base = state.base, { force = false } = {}) {
     const cryptoPayload =
       cryptoResult.status === 'fulfilled' ? cryptoResult.value : null;
 
-    // при partial failure подмешиваем куски из кэша
+    // on partial failure, fill gaps from cache
     const fallbackFiat =
       fiatPayload ||
       (cached?.rates
@@ -887,7 +887,7 @@ function onAmountClear() {
   els.amount.focus();
 }
 
-// смена базы: база в targets, fallback-цель, force reload
+// change base: keep it in targets, fallback target, force reload
 async function onBaseChange() {
   const base = els.base.value;
   syncBaseFlag();
@@ -918,7 +918,7 @@ function onLocaleChange() {
   renderAll();
 }
 
-// убрать валюту из списка; нельзя снять последнюю цель кроме базы
+// remove a currency; cannot drop the last non-base target
 function removeTarget(code) {
   const targets = state.targets.filter((c) => c !== code);
   const others = targets.filter((c) => c !== state.base);
@@ -931,7 +931,7 @@ function removeTarget(code) {
   return true;
 }
 
-// чекбокс валюты; нельзя снять последнюю цель кроме базы
+// currency checkbox; cannot uncheck the last non-base target
 function onManageChange(event) {
   const input = event.target;
   if (!(input instanceof HTMLInputElement) || input.type !== 'checkbox') return;
@@ -953,7 +953,7 @@ function onManageChange(event) {
   }
 }
 
-// переставляет visibleTargets; база остаётся в начале Set
+// reorder visibleTargets; base stays at the start of the Set
 function reorderTargets(fromIndex, toIndex) {
   const others = visibleTargets();
   if (
@@ -973,7 +973,7 @@ function reorderTargets(fromIndex, toIndex) {
   return true;
 }
 
-// порядок строк результатов из DOM → state.targets
+// result row order from DOM → state.targets
 function persistVisibleOrderFromDom() {
   const codes = [...els.results.querySelectorAll('.result-row')]
     .map((row) => row.dataset.code)
@@ -1009,7 +1009,7 @@ function endResultsDrag(event) {
   try {
     handle?.releasePointerCapture?.(event.pointerId);
   } catch {
-    // уже отпущен
+    // already released
   }
 
   row.classList.remove('is-dragging');
@@ -1049,7 +1049,7 @@ function onResultsPointerDown(event) {
   document.addEventListener('pointercancel', endResultsDrag);
 }
 
-// после порога — live insertBefore по половине высоты соседа
+// past the threshold, live insertBefore at the neighbor's midpoint
 function onResultsPointerMove(event) {
   if (!resultsDrag || event.pointerId !== resultsDrag.pointerId) return;
 
@@ -1081,7 +1081,7 @@ function onManageListClick(event) {
   moveTarget(btn.dataset.code, btn.dataset.move);
 }
 
-// открытие/закрытие bottom-sheet manage + restore focus
+// open/close the manage bottom-sheet + restore focus
 function setManageOpen(open) {
   if (open) {
     manageReturnFocus = document.activeElement;
@@ -1125,7 +1125,7 @@ function onManageBackdropClick(event) {
   }
 }
 
-// Escape закрывает; Tab циклит фокус внутри sheet
+// Escape closes; Tab cycles focus inside the sheet
 function onManageKeydown(event) {
   if (els.managePanel.hidden) return;
 
@@ -1155,7 +1155,7 @@ async function onRefresh() {
   await loadRates(state.base, { force: true });
 }
 
-// база ↔ первая цель в списке
+// swap base ↔ first target in the list
 async function onSwap() {
   const targets = visibleTargets();
   if (!targets.length) return;
@@ -1172,7 +1172,7 @@ async function onSwap() {
   await loadRates(nextBase, { force: true });
 }
 
-// Clipboard API с fallback через textarea + execCommand
+// Clipboard API with a textarea + execCommand fallback
 async function copyText(text, button) {
   if (!text || text === t(state.locale, 'emptyAmount')) return;
 
@@ -1222,7 +1222,7 @@ function onResultsClick(event) {
   copyText(text, btn || null);
 }
 
-// начальные значения контролов и все слушатели
+// initial control values and all listeners
 function initControls() {
   els.amount.value = state.amount;
   els.theme.value = state.theme;
@@ -1237,7 +1237,7 @@ function initControls() {
   els.baseInput?.addEventListener('keydown', onBaseInputKeydown);
   els.baseInput?.addEventListener('blur', onBaseComboboxBlur);
   els.baseListbox?.addEventListener('mousedown', (event) => {
-    // не даём input потерять фокус до click по option
+    // keep the input focused until an option is clicked
     event.preventDefault();
   });
   els.baseListbox?.addEventListener('click', onBaseListboxClick);
@@ -1265,7 +1265,7 @@ function initControls() {
 function registerSw() {
   if (!('serviceWorker' in navigator)) return;
 
-  // один reload после смены контроллера, чтобы не остаться на старом SW
+  // one reload after a controller change so we do not stay on the old SW
   let refreshing = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (refreshing) return;

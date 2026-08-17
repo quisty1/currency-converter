@@ -1,4 +1,4 @@
-// строки UI: ru / en; плейсхолдеры вида {date}, {from}, {rate}
+// UI strings: ru / en; placeholders like {date}, {from}, {rate}
 const messages = {
   ru: {
     appName: 'FX Multi',
@@ -88,14 +88,14 @@ const messages = {
   },
 };
 
-// кэш Intl.DisplayNames по BCP 47 тегу
+// Intl.DisplayNames cache keyed by BCP 47 tag
 const displayNamesCache = new Map();
 
 function localeTag(locale) {
   return locale === 'ru' ? 'ru-RU' : 'en-US';
 }
 
-// DisplayNames для названий валют; при недоступности Intl — null
+// DisplayNames for currency names; null if Intl is unavailable
 function currencyDisplayNames(locale) {
   const tag = localeTag(locale);
   let dn = displayNamesCache.get(tag);
@@ -110,7 +110,7 @@ function currencyDisplayNames(locale) {
   return dn;
 }
 
-// дробная часть валюты из NumberFormat (fallback 2)
+// currency fraction digits from NumberFormat (fallback 2)
 function currencyFractionDigits(locale, currency) {
   try {
     const digits = new Intl.NumberFormat(localeTag(locale), {
@@ -123,7 +123,7 @@ function currencyFractionDigits(locale, currency) {
   }
 }
 
-// перевод ключа с подстановкой vars; fallback: ru → сам ключ
+// translate a key with vars; fallback: ru → the key itself
 export function t(locale, key, vars = {}) {
   const dict = messages[locale] || messages.ru;
   let text = dict[key] ?? messages.ru[key] ?? key;
@@ -133,7 +133,7 @@ export function t(locale, key, vars = {}) {
   return text;
 }
 
-// локализованное имя: cryptoMeta → Intl.DisplayNames → код
+// localized name: cryptoMeta → Intl.DisplayNames → code
 export function currencyName(locale, code, cryptoMeta = null) {
   const upper = String(code || '').toUpperCase();
   const cryptoName = cryptoMeta?.[upper]?.name;
@@ -144,12 +144,12 @@ export function currencyName(locale, code, cryptoMeta = null) {
     const name = dn?.of(upper);
     if (name && name !== upper) return name;
   } catch {
-    // неизвестный код
+    // unknown code
   }
   return upper || code;
 }
 
-// знаки после запятой для крипты (мелкие суммы — до 8)
+// crypto fraction digits (tiny amounts up to 8)
 function cryptoFractionDigits(amount) {
   if (amount >= 1000) return 2;
   if (amount >= 1) return 4;
@@ -157,7 +157,7 @@ function cryptoFractionDigits(amount) {
   return 8;
 }
 
-// fallback, когда narrowSymbol всё ещё отдаёт ISO-код
+// fallback when narrowSymbol still returns the ISO code
 const CURRENCY_SYMBOLS = {
   AED: 'د.إ',
   ALL: 'L',
@@ -194,7 +194,7 @@ const CURRENCY_SYMBOLS = {
   YER: '﷼',
 };
 
-// Intl currency options: узкий значок вместо ISO-кода
+// Intl currency options: narrow symbol instead of ISO code
 function currencyFormatOptions(currency) {
   return {
     style: 'currency',
@@ -203,7 +203,7 @@ function currencyFormatOptions(currency) {
   };
 }
 
-// если Intl вернул код — подставляем значок из карты
+// if Intl returned a code, use the symbol from the map
 function applyCurrencySymbol(parts, currency) {
   const mapped = CURRENCY_SYMBOLS[currency];
   if (!mapped) return parts.map((p) => p.value).join('');
@@ -217,7 +217,7 @@ function applyCurrencySymbol(parts, currency) {
     .join('');
 }
 
-// сумма в стиле валюты локали; крипта — число + код; null/NaN → emptyAmount
+// amount in the locale currency style; crypto is number + code; null/NaN → emptyAmount
 export function formatAmount(locale, amount, currency, cryptoMeta = null) {
   if (amount == null || !Number.isFinite(amount)) {
     return t(locale, 'emptyAmount');
@@ -248,7 +248,7 @@ export function formatAmount(locale, amount, currency, cryptoMeta = null) {
   }
 }
 
-// только число без символа/кода валюты (для копирования)
+// number only, no currency symbol/code (for copy)
 export function formatAmountNumber(
   locale,
   amount,
@@ -285,7 +285,7 @@ export function formatAmountNumber(
   }
 }
 
-// компактный курс без символа валюты в стиле "92,45 RUB"
+// compact rate without a currency symbol, e.g. "92,45 RUB"
 export function formatRateValue(locale, amount, currency, cryptoMeta = null) {
   if (amount == null || !Number.isFinite(amount)) {
     return t(locale, 'emptyAmount');
@@ -297,7 +297,7 @@ export function formatRateValue(locale, amount, currency, cryptoMeta = null) {
     ? cryptoFractionDigits(Math.abs(amount))
     : currencyFractionDigits(locale, upper);
 
-  // больше знаков для мелких курсов, меньше для крупных
+  // more digits for tiny rates, fewer for large ones
   const digits = isCrypto
     ? currencyDigits
     : currencyDigits === 0 && amount >= 1
@@ -319,7 +319,7 @@ export function formatRateValue(locale, amount, currency, cryptoMeta = null) {
   }
 }
 
-// дата/время обновления курса; битая строка — как есть
+// rate updated date/time; leave a broken string as-is
 export function formatRateDate(locale, dateStr) {
   if (!dateStr) return '—';
   const date = new Date(dateStr);

@@ -1,7 +1,7 @@
-// ключ localStorage для всего UI-состояния приложения
+// localStorage key for the whole UI state
 const STORAGE_KEY = 'fx-multi-state';
 
-// значения по умолчанию до первого сохранения / при битом JSON
+// defaults until the first save / on broken JSON
 const defaults = {
   theme: 'system',
   locale: 'ru',
@@ -11,7 +11,7 @@ const defaults = {
   ratesCache: null,
 };
 
-// ru* → ru, иначе en (из navigator.languages)
+// ru* → ru, otherwise en (from navigator.languages)
 export function detectSystemLocale() {
   const langs = [
     ...(typeof navigator !== 'undefined' && navigator.languages
@@ -26,7 +26,7 @@ export function detectSystemLocale() {
   return 'en';
 }
 
-// читает state из localStorage; при ошибке / первом визите — defaults + системная локаль
+// load state from localStorage; on error / first visit — defaults + system locale
 export function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -46,7 +46,7 @@ export function loadState() {
       ...defaults,
       ...parsed,
       locale,
-      // пустой/битый targets не принимаем — откат к дефолтному списку
+      // reject empty/broken targets — fall back to the default list
       targets:
         Array.isArray(parsed.targets) && parsed.targets.length
           ? parsed.targets
@@ -61,7 +61,7 @@ export function loadState() {
   }
 }
 
-// мержит partial в текущий state без повторного чтения localStorage
+// merge a partial into current state without re-reading localStorage
 export function saveState(state, partial) {
   const next = { ...state, ...partial };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
