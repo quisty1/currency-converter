@@ -91,7 +91,7 @@ let ratesAbort = null;
 // where to restore focus after closing manage
 let manageReturnFocus = null;
 // timer to reset the "Copied" button text
-let copyResetTimer = null;
+const copyResetTimers = new WeakMap();
 // guard against a replaceState ↔ popstate loop
 let syncingUrl = false;
 // pointer-drag state for a result row
@@ -560,9 +560,13 @@ function syncManageTabs() {
   const isFiat = manageTab === 'fiat';
   if (els.tabFiat) {
     els.tabFiat.setAttribute('aria-selected', isFiat ? 'true' : 'false');
+    els.tabFiat.tabIndex = isFiat ? 0 : -1;
+    els.tabFiat.setAttribute('aria-controls', 'manage-list');
   }
   if (els.tabCrypto) {
     els.tabCrypto.setAttribute('aria-selected', isFiat ? 'false' : 'true');
+    els.tabCrypto.tabIndex = isFiat ? -1 : 0;
+    els.tabCrypto.setAttribute('aria-controls', 'manage-list');
   }
   if (els.manageList) {
     els.manageList.setAttribute(
@@ -690,7 +694,8 @@ function renderResults() {
             type="button"
             class="btn-text result-copy"
             data-copy-btn
-            aria-label="${t(state.locale, 'copyAmount')}"
+            aria-label="${t(state.locale, 'copyAmount')} ${code}"
+            ${value == null || !Number.isFinite(value) ? 'disabled' : ''}
           >${t(state.locale, 'copyAmount')}</button>
         </div>
         <button
@@ -718,6 +723,7 @@ function renderResults() {
 
 // status line: amount error / loading / cache / fresh rates
 function renderStatus() {
+  els.amount.setAttribute('aria-invalid', String(amountIsInvalid()));
   if (amountIsInvalid()) {
     els.status.textContent = t(state.locale, 'invalidAmount');
     els.status.dataset.tone = 'error';
@@ -1119,6 +1125,16 @@ function onManageTabClick(event) {
   renderManageList();
 }
 
+function onManageTabKeydown(event) {
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+  event.preventDefault();
+  manageTab = event.key === 'Home' ? 'fiat'
+    : event.key === 'End' ? 'crypto'
+    : manageTab === 'fiat' ? 'crypto' : 'fiat';
+  renderManageList();
+  (manageTab === 'fiat' ? els.tabFiat : els.tabCrypto).focus();
+}
+
 function onManageBackdropClick(event) {
   if (event.target === els.managePanel) {
     setManageOpen(false);
@@ -1191,12 +1207,12 @@ async function copyText(text, button) {
   }
 
   if (button) {
-    const prev = button.textContent;
     button.textContent = t(state.locale, 'copied');
-    clearTimeout(copyResetTimer);
-    copyResetTimer = setTimeout(() => {
-      button.textContent = prev;
-    }, 1200);
+    clearTimeout(copyResetTimers.get(button));
+    copyResetTimers.set(button, setTimeout(() => {
+      button.textContent = t(state.locale, 'copyAmount');
+      copyResetTimers.delete(button);
+    }, 1200));
   }
 }
 
@@ -1218,8 +1234,9 @@ function onResultsClick(event) {
   }
 
   const btn = event.target.closest('[data-copy-btn]');
+  if (btn?.disabled) return;
   const text = row.dataset.copy;
-  copyText(text, btn || null);
+  copyText(text, btn || row.querySelector('[data-copy-btn]'));
 }
 
 // initial control values and all listeners
@@ -1248,6 +1265,7 @@ function initControls() {
   els.manageList.addEventListener('click', onManageListClick);
   els.manageSearch.addEventListener('input', onManageSearchInput);
   els.manageTabs?.addEventListener('click', onManageTabClick);
+  els.manageTabs?.addEventListener('keydown', onManageTabKeydown);
   els.openManageBtn.addEventListener('click', () => setManageOpen(true));
   els.closeManageBtn.addEventListener('click', () => setManageOpen(false));
   els.managePanel.addEventListener('click', onManageBackdropClick);

@@ -1,5 +1,5 @@
 // Cache Storage name; bump when the asset list changes
-const CACHE = 'fx-multi-v3';
+const CACHE = 'fx-multi-v4';
 
 // app shell for offline (no rates API)
 const ASSETS = [

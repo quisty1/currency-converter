@@ -58,14 +58,14 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preconnect" href="https://flagcdn.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@600&family=Space+Grotesk:wght@400;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@600&display=swap"
       rel="stylesheet"
       media="print"
       onload="this.media = 'all'"
     />
     <noscript>
       <link
-        href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@600&family=Space+Grotesk:wght@400;600&display=swap"
+        href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@600&display=swap"
         rel="stylesheet"
       />
     </noscript>
@@ -111,9 +111,6 @@
       >К основному содержимому</a
     >
 
-    <!-- background grid -->
-    <div class="bg" aria-hidden="true"></div>
-
     <div class="shell">
       <!-- brand + theme/locale -->
       <header class="top">
@@ -158,6 +155,7 @@
                   autocomplete="off"
                   placeholder="100"
                   value="100"
+                  aria-describedby="status"
                 />
                 <button
                   type="button"
@@ -286,7 +284,7 @@
             placeholder="Поиск…"
           />
         </label>
-        <div class="manage-tabs" role="tablist" aria-label="Asset type">
+        <div class="manage-tabs" role="tablist" data-i18n-aria="assetType" aria-label="Тип валюты">
           <button
             type="button"
             role="tab"
