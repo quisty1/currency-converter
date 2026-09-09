@@ -14,7 +14,7 @@ import CloseRounded from '@mui/icons-material/CloseRounded';
 import SwapVertRounded from '@mui/icons-material/SwapVertRounded';
 import { CurrencyAvatar } from './CurrencyAvatar';
 import { currencyName, useI18n } from '../i18n/I18nProvider';
-import { parseAmount } from '../domain/currency';
+import { assetCode, parseAmount } from '../domain/currency';
 import type { RatesPayload } from '../domain/types';
 import { useSettings } from '../store/settings';
 
@@ -70,7 +70,10 @@ export function ConverterHero({
             InputProps={{
               endAdornment: amount ? (
                 <InputAdornment position="end">
-                  <IconButton onClick={() => setAmount('')} aria-label="Clear">
+                  <IconButton
+                    onClick={() => setAmount('')}
+                    aria-label={t('clear')}
+                  >
                     <CloseRounded />
                   </IconButton>
                 </InputAdornment>
@@ -110,7 +113,7 @@ export function ConverterHero({
                 options={codes}
                 onChange={(_, value) => setBase(value)}
                 getOptionLabel={(code) =>
-                  `${code} — ${currencyName(locale, code, payload)}`
+                  `${assetCode(code, payload)} — ${currencyName(locale, code, payload)}`
                 }
                 renderOption={(props, code) => {
                   const { key, ...optionProps } = props;
@@ -123,7 +126,7 @@ export function ConverterHero({
                     >
                       <CurrencyAvatar code={code} payload={payload} size={30} />
                       <Box>
-                        <b>{code}</b>
+                        <b>{assetCode(code, payload)}</b>
                         <Typography
                           variant="caption"
                           display="block"

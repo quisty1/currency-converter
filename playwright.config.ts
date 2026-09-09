@@ -6,7 +6,11 @@ export default defineConfig({
   // Retry only in CI, where transient browser failures are more common.
   retries: process.env.CI ? 2 : 0,
   reporter: [['html', { open: 'never' }]],
-  use: { baseURL: 'http://127.0.0.1:4173', trace: 'on-first-retry' },
+  use: {
+    baseURL: 'http://127.0.0.1:4173',
+    trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
+  },
   webServer: {
     command: 'npm run dev -- --host 127.0.0.1 --port 4173',
     url: 'http://127.0.0.1:4173',

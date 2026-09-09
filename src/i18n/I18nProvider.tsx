@@ -1,6 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import type { Locale, RatesPayload } from '../domain/types';
+import { assetCode } from '../domain/currency';
 
 const dictionaries = {
   ru: {
@@ -14,6 +15,8 @@ const dictionaries = {
     cached: 'Сохранённые курсы от {date}',
     loading: 'Обновляем курсы…',
     error: 'Не удалось обновить курсы. Используем сохранённые данные.',
+    totalError:
+      'Не удалось загрузить курсы. Проверьте подключение и повторите попытку.',
     refresh: 'Обновить курсы',
     swap: 'Поменять местами',
     copied: 'Скопировано',
@@ -42,6 +45,15 @@ const dictionaries = {
     drag: 'Изменить порядок',
     settings: 'Настройки',
     skip: 'К конвертеру',
+    clear: 'Очистить',
+    add: 'Добавить',
+    fiatUnavailable: 'Фиатные курсы недоступны',
+    cryptoUnavailable: 'Криптокурсы недоступны',
+    checkedAt: 'Последняя проверка: {date}',
+    invalidUrl: 'Некорректные параметры ссылки были исправлены.',
+    copyFailed: 'Не удалось скопировать результат',
+    fiatUpdated: 'Фиат: {date}',
+    cryptoUpdated: 'Крипто: {date}',
   },
   en: {
     tagline: 'One amount in every currency you need',
@@ -54,6 +66,7 @@ const dictionaries = {
     cached: 'Saved rates from {date}',
     loading: 'Updating rates…',
     error: 'Could not refresh rates. Using saved data.',
+    totalError: 'Could not load rates. Check your connection and try again.',
     refresh: 'Refresh rates',
     swap: 'Swap currencies',
     copied: 'Copied',
@@ -81,6 +94,15 @@ const dictionaries = {
     drag: 'Reorder',
     settings: 'Settings',
     skip: 'Skip to converter',
+    clear: 'Clear',
+    add: 'Add',
+    fiatUnavailable: 'Fiat rates unavailable',
+    cryptoUnavailable: 'Crypto rates unavailable',
+    checkedAt: 'Last checked: {date}',
+    invalidUrl: 'Invalid link parameters were corrected.',
+    copyFailed: 'Could not copy the result',
+    fiatUpdated: 'Fiat: {date}',
+    cryptoUpdated: 'Crypto: {date}',
   },
 } as const;
 
@@ -127,8 +149,8 @@ export function currencyName(
   code: string,
   payload?: RatesPayload | null,
 ) {
-  const upper = code.toUpperCase();
-  if (payload?.cryptoMeta[upper]?.name) return payload.cryptoMeta[upper].name;
+  if (payload?.cryptoMeta[code]?.name) return payload.cryptoMeta[code].name;
+  const upper = assetCode(code, payload).toUpperCase();
   try {
     return (
       new Intl.DisplayNames(localeTag(locale), { type: 'currency' }).of(
@@ -147,7 +169,7 @@ export function formatValue(
   payload?: RatesPayload | null,
 ) {
   if (amount == null || !Number.isFinite(amount)) return '—';
-  const isCrypto = Boolean(payload?.cryptoMeta[code]);
+  const isCrypto = code.startsWith('crypto:');
   // Preserve useful precision for small crypto values without over-formatting fiat.
   const digits = isCrypto
     ? Math.abs(amount) >= 1
@@ -159,7 +181,7 @@ export function formatValue(
   const value = new Intl.NumberFormat(localeTag(locale), {
     maximumFractionDigits: digits,
   }).format(amount);
-  return `${value} ${code}`;
+  return `${value} ${assetCode(code, payload)}`;
 }
 
 export function formatDate(locale: Locale, value: string) {

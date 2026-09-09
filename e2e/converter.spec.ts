@@ -50,7 +50,7 @@ test('removes a currency directly from the results list', async ({ page }) => {
   await page.getByRole('button', { name: 'Убрать EUR' }).click();
 
   await expect(page.getByText('EUR', { exact: true })).not.toBeVisible();
-  await expect(page).toHaveURL(/to=RUB%2CBTC/);
+  await expect(page).toHaveURL(/to=RUB%2Ccrypto%3Abitcoin/);
 });
 
 test('fits long results on an iPhone-sized viewport', async ({ page }) => {
@@ -76,4 +76,22 @@ test('fits long results on an iPhone-sized viewport', async ({ page }) => {
       ),
     )
     .toBe(true);
+});
+
+test('has no horizontal overflow at 320px', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.goto('/?amount=1000000&from=USD&to=RUB,EUR,BTC&locale=ru');
+  await expect(page.getByText('90 000 000 RUB')).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+});
+
+test('supports keyboard reordering without duplicates', async ({ page }) => {
+  const handle = page.getByRole('button', { name: 'Изменить порядок RUB' });
+  await handle.focus();
+  await page.keyboard.press('Alt+ArrowDown');
+  await expect(page).toHaveURL(/to=EUR%2CRUB%2Ccrypto%3Abitcoin/);
 });

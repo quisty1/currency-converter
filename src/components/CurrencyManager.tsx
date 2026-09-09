@@ -22,7 +22,7 @@ import {
   useTheme,
 } from '@mui/material';
 import SearchRounded from '@mui/icons-material/SearchRounded';
-import { cryptoCodes, fiatCodes } from '../domain/currency';
+import { assetCode, cryptoCodes, fiatCodes } from '../domain/currency';
 import type { RatesPayload } from '../domain/types';
 import { currencyName, useI18n } from '../i18n/I18nProvider';
 import { useSettings } from '../store/settings';
@@ -49,7 +49,7 @@ export function CurrencyManager({
     return codes.filter(
       (code) =>
         !query ||
-        code.toLowerCase().includes(query) ||
+        assetCode(code, payload).toLowerCase().includes(query) ||
         currencyName(locale, code, payload)
           .toLocaleLowerCase(locale)
           .includes(query),
@@ -75,7 +75,8 @@ export function CurrencyManager({
         sx: {
           borderRadius: fullScreen ? 0 : 4,
           minHeight: fullScreen ? '100%' : 620,
-          padding: '10px',
+          padding: fullScreen ? 0 : '10px',
+          boxSizing: 'border-box',
         },
       }}
     >
@@ -98,7 +99,7 @@ export function CurrencyManager({
           {t('manageHint')}
         </Typography>
       </DialogTitle>
-      <DialogContent sx={{ px: { xs: 2, sm: 3 } }}>
+      <DialogContent sx={{ px: { xs: 2, sm: 3 }, minHeight: 0 }}>
         <TextField
           autoFocus
           fullWidth
@@ -154,7 +155,7 @@ export function CurrencyManager({
                     <CurrencyAvatar code={code} payload={payload} size={34} />
                   </ListItemIcon>
                   <ListItemText
-                    primary={<b>{code}</b>}
+                    primary={<b>{assetCode(code, payload)}</b>}
                     secondary={currencyName(locale, code, payload)}
                   />
                   <Checkbox
@@ -162,7 +163,7 @@ export function CurrencyManager({
                     checked={checked}
                     disabled={code === base}
                     inputProps={{
-                      'aria-label': `${checked ? t('remove') : t('selected')} ${code}`,
+                      'aria-label': `${checked ? t('remove') : t('add')} ${assetCode(code, payload)}`,
                     }}
                   />
                 </ListItemButton>
@@ -175,7 +176,9 @@ export function CurrencyManager({
           </Box>
         )}
       </DialogContent>
-      <DialogActions sx={{ p: 2.5, borderTop: 1, borderColor: 'divider' }}>
+      <DialogActions
+        sx={{ p: 2.5, borderTop: 1, borderColor: 'divider', flexShrink: 0 }}
+      >
         <Button onClick={onClose} variant="contained" size="large" fullWidth>
           {t('done')}
         </Button>

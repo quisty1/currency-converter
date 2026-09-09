@@ -2,6 +2,7 @@ import { Avatar } from '@mui/material';
 import PaymentsRounded from '@mui/icons-material/PaymentsRounded';
 import type { RatesPayload } from '../domain/types';
 import { flagUrl } from '../domain/currencyCountry';
+import { assetCode } from '../domain/currency';
 
 export function CurrencyAvatar({
   code,
@@ -13,7 +14,7 @@ export function CurrencyAvatar({
   size?: number;
 }) {
   const crypto = payload?.cryptoMeta[code]?.image;
-  const src = crypto || flagUrl(code);
+  const src = crypto || flagUrl(assetCode(code, payload));
   return (
     <Avatar
       src={src}

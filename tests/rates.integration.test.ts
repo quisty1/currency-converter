@@ -28,16 +28,20 @@ const server = setupServer(
 );
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
-afterEach(() => server.resetHandlers());
+afterEach(() => {
+  server.resetHandlers();
+  localStorage.clear();
+});
 afterAll(() => server.close());
 
 describe('rates API', () => {
   it('validates and merges fiat and crypto', async () => {
     const result = await fetchRates();
-    expect(result.base).toBe('USD');
-    expect(result.rates.EUR).toBe(0.9);
-    expect(result.rates.BTC).toBeCloseTo(0.00001);
-    expect(result.cryptoMeta.BTC.name).toBe('Bitcoin');
+    expect(result.base).toBe('fiat:USD');
+    expect(result.rates['fiat:EUR']).toBe(0.9);
+    expect(result.rates['crypto:bitcoin']).toBeCloseTo(0.00001);
+    expect(result.cryptoMeta['crypto:bitcoin'].name).toBe('Bitcoin');
+    expect(result.failedSources).toEqual([]);
   });
   it('keeps useful partial data when one provider fails', async () => {
     server.use(
@@ -47,8 +51,73 @@ describe('rates API', () => {
       ),
     );
     const result = await fetchRates();
-    expect(result.rates.RUB).toBe(90);
-    expect(result.cryptoMeta).toEqual({});
+    expect(result.rates['fiat:RUB']).toBe(90);
+    expect(result.cryptoStatus).toBe('error');
+    expect(result.failedSources).toEqual(['crypto']);
+  });
+  it('reports a fiat-only failure while retaining crypto', async () => {
+    server.use(
+      http.get(
+        'https://open.er-api.com/v6/latest/USD',
+        () => new HttpResponse(null, { status: 503 }),
+      ),
+    );
+    const result = await fetchRates();
+    expect(result.fiatStatus).toBe('error');
+    expect(result.cryptoStatus).toBe('success');
+    expect(result.rates['crypto:bitcoin']).toBeCloseTo(0.00001);
+    expect(result.failedSources).toEqual(['fiat']);
+  });
+  it('keeps cached provider data during a partial refresh', async () => {
+    await fetchRates();
+    server.use(
+      http.get(
+        'https://api.coingecko.com/api/v3/coins/markets',
+        () => new HttpResponse(null, { status: 503 }),
+      ),
+    );
+    const result = await fetchRates();
+    expect(result.cryptoStatus).toBe('error');
+    expect(result.rates['crypto:bitcoin']).toBeCloseTo(0.00001);
+  });
+  it('keeps colliding crypto symbols as separate CoinGecko IDs', async () => {
+    server.use(
+      http.get('https://api.coingecko.com/api/v3/coins/markets', () =>
+        HttpResponse.json([
+          crypto[0],
+          { ...crypto[0], id: 'bitcoin-2', name: 'Bitcoin 2' },
+        ]),
+      ),
+    );
+    const result = await fetchRates();
+    expect(Object.keys(result.cryptoMeta)).toEqual([
+      'crypto:bitcoin',
+      'crypto:bitcoin-2',
+    ]);
+  });
+  it('loads a saved crypto ID outside the top list', async () => {
+    server.use(
+      http.get(
+        'https://api.coingecko.com/api/v3/coins/markets',
+        ({ request }) => {
+          const requested = new URL(request.url).searchParams.get('ids');
+          return HttpResponse.json(
+            requested
+              ? [
+                  {
+                    ...crypto[0],
+                    id: 'rare-coin',
+                    symbol: 'rare',
+                    name: 'Rare Coin',
+                  },
+                ]
+              : crypto,
+          );
+        },
+      ),
+    );
+    const result = await fetchRates(undefined, ['rare-coin']);
+    expect(result.cryptoMeta['crypto:rare-coin'].symbol).toBe('RARE');
   });
   it('fails when both providers fail', async () => {
     server.use(

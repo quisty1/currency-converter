@@ -7,6 +7,7 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragOverEvent,
 } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -29,7 +30,7 @@ import {
 import ContentCopyRounded from '@mui/icons-material/ContentCopyRounded';
 import DeleteOutlineRounded from '@mui/icons-material/DeleteOutlineRounded';
 import DragIndicatorRounded from '@mui/icons-material/DragIndicatorRounded';
-import { convert, parseAmount, unitRate } from '../domain/currency';
+import { assetCode, convert, parseAmount, unitRate } from '../domain/currency';
 import type { RatesPayload } from '../domain/types';
 import { CurrencyAvatar } from './CurrencyAvatar';
 import { currencyName, formatValue, useI18n } from '../i18n/I18nProvider';
@@ -40,11 +41,13 @@ function ResultCard({
   payload,
   loading,
   onRemove,
+  onKeyboardMove,
 }: {
   code: string;
   payload?: RatesPayload;
   loading: boolean;
   onRemove: () => void;
+  onKeyboardMove: (direction: -1 | 1) => void;
 }) {
   const { locale, t } = useI18n();
   const { amount, base } = useSettings();
@@ -53,6 +56,7 @@ function ResultCard({
     numericAmount == null ? null : convert(numericAmount, base, code, payload);
   const rate = unitRate(base, code, payload);
   const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState(false);
   const sortable = useSortable({ id: code });
   const style = {
     transform: CSS.Transform.toString(sortable.transform),
@@ -61,9 +65,18 @@ function ResultCard({
   };
   const copy = async () => {
     if (result == null) return;
-    await navigator.clipboard.writeText(String(result));
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1200);
+    try {
+      await navigator.clipboard.writeText(
+        formatValue(locale, result, code, payload),
+      );
+      setCopyError(false);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1200);
+    } catch {
+      setCopied(false);
+      setCopyError(true);
+      window.setTimeout(() => setCopyError(false), 2400);
+    }
   };
   return (
     <Card
@@ -85,7 +98,7 @@ function ResultCard({
           sx={{
             display: 'grid',
             gridTemplateColumns: {
-              xs: '32px 76px minmax(0, 1fr) 32px 32px',
+              xs: '44px 60px minmax(0, 1fr) 44px 44px',
               sm: '40px 42px minmax(110px, 1fr) minmax(0, auto) 40px 40px',
             },
             gridTemplateRows: { xs: 'auto auto', sm: 'auto' },
@@ -95,15 +108,28 @@ function ResultCard({
           }}
         >
           <IconButton
+            ref={sortable.setActivatorNodeRef}
             {...sortable.attributes}
             {...sortable.listeners}
-            aria-label={`${t('drag')} ${code}`}
+            aria-label={`${t('drag')} ${assetCode(code, payload)}`}
+            aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
             onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => {
+              if (
+                event.altKey &&
+                (event.key === 'ArrowUp' || event.key === 'ArrowDown')
+              ) {
+                event.preventDefault();
+                onKeyboardMove(event.key === 'ArrowUp' ? -1 : 1);
+              }
+            }}
             sx={{
               cursor: 'grab',
               touchAction: 'none',
               color: 'text.disabled',
-              p: { xs: 0.5, sm: 1 },
+              minWidth: 44,
+              minHeight: 44,
+              p: 1,
               gridColumn: 1,
               gridRow: { xs: '1 / span 2', sm: 1 },
             }}
@@ -134,7 +160,9 @@ function ResultCard({
               alignItems="center"
               justifyContent={{ xs: 'center', sm: 'flex-start' }}
             >
-              <Typography fontWeight={800}>{code}</Typography>
+              <Typography fontWeight={800}>
+                {assetCode(code, payload)}
+              </Typography>
               {payload?.cryptoMeta[code] && (
                 <Chip
                   label="crypto"
@@ -166,6 +194,7 @@ function ResultCard({
             ) : (
               <Typography
                 variant="h6"
+                component="div"
                 fontWeight={750}
                 sx={{
                   fontVariantNumeric: 'tabular-nums',
@@ -184,21 +213,27 @@ function ResultCard({
               {rate == null
                 ? t('noRate')
                 : t('rate', {
-                    from: base,
+                    from: assetCode(base, payload),
                     value: formatValue(locale, rate, code, payload),
                   })}
             </Typography>
           </Box>
-          <Tooltip title={copied ? t('copied') : t('copy')}>
+          <Tooltip
+            title={
+              copyError ? t('copyFailed') : copied ? t('copied') : t('copy')
+            }
+          >
             <IconButton
-              aria-label={`${t('copy')} ${code}`}
+              aria-label={`${t('copy')} ${assetCode(code, payload)}`}
               onClick={(event) => {
                 event.stopPropagation();
                 void copy();
               }}
               color={copied ? 'success' : 'default'}
               sx={{
-                p: { xs: 0.5, sm: 1 },
+                minWidth: 44,
+                minHeight: 44,
+                p: 1,
                 gridColumn: { xs: 4, sm: 5 },
                 gridRow: 1,
               }}
@@ -208,13 +243,15 @@ function ResultCard({
           </Tooltip>
           <Tooltip title={t('remove')}>
             <IconButton
-              aria-label={`${t('remove')} ${code}`}
+              aria-label={`${t('remove')} ${assetCode(code, payload)}`}
               onClick={(event) => {
                 event.stopPropagation();
                 onRemove();
               }}
               sx={{
-                p: { xs: 0.5, sm: 1 },
+                minWidth: 44,
+                minHeight: 44,
+                p: 1,
                 gridColumn: { xs: 5, sm: 6 },
                 gridRow: 1,
               }}
@@ -222,6 +259,20 @@ function ResultCard({
               <DeleteOutlineRounded fontSize="small" />
             </IconButton>
           </Tooltip>
+          <Box
+            role="status"
+            aria-live="polite"
+            sx={{
+              position: 'absolute',
+              width: '1px',
+              height: '1px',
+              overflow: 'hidden',
+              clip: 'rect(0 0 0 0)',
+              pointerEvents: 'none',
+            }}
+          >
+            {copyError ? t('copyFailed') : copied ? t('copied') : ''}
+          </Box>
         </Box>
       </Box>
     </Card>
@@ -244,7 +295,7 @@ export function ResultsList({
       coordinateGetter: sortableKeyboardCoordinates,
     }),
   );
-  const onDragEnd = ({ active, over }: DragEndEvent) => {
+  const reorder = ({ active, over }: DragEndEvent | DragOverEvent) => {
     if (!over || active.id === over.id) return;
     const from = visible.indexOf(String(active.id));
     const to = visible.indexOf(String(over.id));
@@ -252,11 +303,19 @@ export function ResultsList({
     // Preserve a hidden base entry when it already exists in the stored order.
     setTargets(targets.includes(base) ? [base, ...reordered] : reordered);
   };
+  const keyboardMove = (code: string, direction: -1 | 1) => {
+    const from = visible.indexOf(code);
+    const to = Math.max(0, Math.min(visible.length - 1, from + direction));
+    if (from === to) return;
+    const reordered = arrayMove(visible, from, to);
+    setTargets(targets.includes(base) ? [base, ...reordered] : reordered);
+  };
   return (
     <DndContext
       sensors={sensors}
       collisionDetection={closestCenter}
-      onDragEnd={onDragEnd}
+      onDragOver={reorder}
+      onDragEnd={reorder}
     >
       <SortableContext items={visible} strategy={verticalListSortingStrategy}>
         <Stack component="ul" sx={{ listStyle: 'none', p: 0, m: 0 }} gap={1.5}>
@@ -269,6 +328,7 @@ export function ResultsList({
                 onRemove={() =>
                   setTargets(targets.filter((target) => target !== code))
                 }
+                onKeyboardMove={(direction) => keyboardMove(code, direction)}
               />
             </Box>
           ))}

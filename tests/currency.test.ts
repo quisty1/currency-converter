@@ -5,16 +5,33 @@ import {
   isCurrencyCode,
   parseAmount,
   unitRate,
+  migrateAsset,
+  urlAsset,
 } from '../src/domain/currency';
 import type { RatesPayload } from '../src/domain/types';
 import { currencyCountry, flagUrl } from '../src/domain/currencyCountry';
 
 const payload: RatesPayload = {
-  base: 'USD',
+  base: 'fiat:USD',
   date: '2026-01-01',
   fetchedAt: Date.now(),
-  rates: { USD: 1, EUR: 0.9, RUB: 90, BTC: 1 / 100_000 },
-  cryptoMeta: { BTC: { name: 'Bitcoin', image: '', id: 'bitcoin' } },
+  fiatStatus: 'success',
+  cryptoStatus: 'success',
+  failedSources: [],
+  rates: {
+    'fiat:USD': 1,
+    'fiat:EUR': 0.9,
+    'fiat:RUB': 90,
+    'crypto:bitcoin': 1 / 100_000,
+  },
+  cryptoMeta: {
+    'crypto:bitcoin': {
+      symbol: 'BTC',
+      name: 'Bitcoin',
+      image: '',
+      id: 'bitcoin',
+    },
+  },
 };
 
 describe('currency domain', () => {
@@ -27,7 +44,9 @@ describe('currency domain', () => {
     expect(convert(100, 'USD', 'EUR', payload)).toBe(90);
     expect(convert(90, 'EUR', 'USD', payload)).toBe(100);
     expect(convert(1, 'EUR', 'RUB', payload)).toBe(100);
-    expect(convert(1, 'BTC', 'USD', payload)).toBeCloseTo(100_000);
+    expect(convert(1, 'crypto:bitcoin', 'fiat:USD', payload)).toBeCloseTo(
+      100_000,
+    );
     expect(unitRate('USD', 'RUB', payload)).toBe(90);
   });
   it('rejects unavailable data and bad codes', () => {
@@ -50,5 +69,25 @@ describe('currency domain', () => {
     expect(flagUrl('AMD')).toBe('https://flagcdn.com/w80/am.png');
     expect(flagUrl('XAU')).toBeUndefined();
     expect(flagUrl('BTC')).toBeUndefined();
+  });
+  it('migrates legacy tickers deterministically and keeps URL IDs readable', () => {
+    const colliding = {
+      ...payload,
+      cryptoMeta: {
+        'crypto:zeta': { id: 'zeta', symbol: 'SAME', name: 'Zeta', image: '' },
+        'crypto:alpha': {
+          id: 'alpha',
+          symbol: 'SAME',
+          name: 'Alpha',
+          image: '',
+        },
+      },
+    };
+    expect(migrateAsset('USD', payload)).toBe('fiat:USD');
+    expect(migrateAsset('BTC', payload)).toBe('crypto:bitcoin');
+    expect(migrateAsset('SAME', colliding)).toBe('crypto:alpha');
+    expect(migrateAsset('INVALID', payload)).toBeNull();
+    expect(urlAsset('fiat:EUR')).toBe('EUR');
+    expect(urlAsset('crypto:bitcoin')).toBe('crypto:bitcoin');
   });
 });

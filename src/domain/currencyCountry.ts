@@ -167,6 +167,8 @@ const CURRENCY_COUNTRY: Readonly<Record<string, string | null>> = {
   XPT: null,
 };
 
+export const KNOWN_FIAT_CODES = Object.freeze(Object.keys(CURRENCY_COUNTRY));
+
 export function currencyCountry(code: string): string | null {
   return CURRENCY_COUNTRY[code.toUpperCase()] ?? null;
 }

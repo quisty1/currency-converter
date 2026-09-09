@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 test('converter visual baseline', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-01-01T00:00:00Z'));
   await page.route('https://open.er-api.com/**', (route) =>
     route.fulfill({
       json: {
