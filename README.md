@@ -28,6 +28,12 @@ npm run check
 
 Playwright browsers must be installed once with `npx playwright install chromium` before running E2E tests.
 
+## Deployment
+
+Pushes to `main` are built and deployed to GitHub Pages automatically. In the
+repository settings, select **Settings → Pages → Source → GitHub Actions** once
+to enable the deployment workflow.
+
 ## Architecture
 
 `src/domain` contains pure conversion logic and types. `src/api` owns external providers and runtime validation. TanStack Query owns rates; Zustand owns amount, base currency, targets, locale and theme. `src/i18n` contains the application dictionary and locale-aware formatting.

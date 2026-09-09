@@ -3,6 +3,8 @@ import { VitePWA } from 'vite-plugin-pwa';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
+  // GitHub project pages are served from /<repository>/, not the domain root.
+  base: '/currency-converter/',
   build: {
     rollupOptions: {
       output: {
