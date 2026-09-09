@@ -4,7 +4,7 @@ const fiat = {
   result: 'success',
   base_code: 'USD',
   time_last_update_utc: 'Thu, 01 Jan 2026 00:00:00 +0000',
-  rates: { USD: 1, EUR: 0.9, RUB: 90 },
+  rates: { USD: 1, EUR: 0.9, RUB: 90, VND: 25932.753 },
 };
 const crypto = [
   {
@@ -44,4 +44,36 @@ test('converts, updates URL and opens currency manager', async ({ page }) => {
   await page.getByRole('dialog').getByRole('button', { name: /^EUR / }).click();
   await page.getByRole('button', { name: 'Готово' }).click();
   await expect(page.getByText('EUR', { exact: true })).not.toBeVisible();
+});
+
+test('removes a currency directly from the results list', async ({ page }) => {
+  await page.getByRole('button', { name: 'Убрать EUR' }).click();
+
+  await expect(page.getByText('EUR', { exact: true })).not.toBeVisible();
+  await expect(page).toHaveURL(/to=RUB%2CBTC/);
+});
+
+test('fits long results on an iPhone-sized viewport', async ({ page }) => {
+  await page.setViewportSize({ width: 393, height: 852 });
+  await page.goto(
+    '/?amount=1000000&from=USD&to=RUB,EUR,BTC,ETH,VND&locale=en&theme=dark',
+  );
+
+  await expect(page.getByText('25,932,753,000 VND')).toBeVisible();
+  const cryptoTags = page.getByText('crypto', { exact: true });
+  await expect(cryptoTags.first()).toBeHidden();
+  await expect(cryptoTags.last()).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Remove BTC' })).toBeVisible();
+  const btcCard = page.getByRole('listitem').filter({ hasText: 'BTC' }).first();
+  const avatarBox = await btcCard.locator('.MuiAvatar-root').boundingBox();
+  const codeBox = await btcCard.getByText('BTC', { exact: true }).boundingBox();
+  if (!avatarBox || !codeBox) throw new Error('BTC card layout is not visible');
+  expect(avatarBox.y + avatarBox.height).toBeLessThanOrEqual(codeBox.y);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    )
+    .toBe(true);
 });

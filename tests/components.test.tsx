@@ -4,6 +4,7 @@ import { ThemeProvider } from '@mui/material';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { ConverterHero } from '../src/components/ConverterHero';
 import { CurrencyManager } from '../src/components/CurrencyManager';
+import { ResultsList } from '../src/components/ResultsList';
 import { I18nProvider } from '../src/i18n/I18nProvider';
 import { createAppTheme } from '../src/theme';
 import { useSettings } from '../src/store/settings';
@@ -58,5 +59,16 @@ describe('converter UI', () => {
     await user.type(screen.getByLabelText('Название или код валюты'), 'EUR');
     await user.click(screen.getByText('EUR'));
     expect(useSettings.getState().targets).toEqual(['RUB', 'BTC']);
+  });
+  it('removes a currency directly from the results list', async () => {
+    const user = userEvent.setup();
+    render(<ResultsList payload={payload} loading={false} />, {
+      wrapper: Wrapper,
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Убрать EUR' }));
+
+    expect(useSettings.getState().targets).toEqual(['RUB', 'BTC']);
+    expect(screen.queryByText('EUR', { exact: true })).not.toBeInTheDocument();
   });
 });
