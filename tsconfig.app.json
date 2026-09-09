@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    // Match modern browsers and let Vite handle bundling and output generation.
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "skipLibCheck": true,
+    "strict": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    // Type-check only; Vite emits the production assets.
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "types": ["vite/client", "vitest/globals", "@testing-library/jest-dom"]
+  },
+  // Keep application and unit-test types in the same browser-oriented project.
+  "include": ["src", "tests"]
+}

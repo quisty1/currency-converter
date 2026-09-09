@@ -1,317 +1,40 @@
 <!doctype html>
-<html lang="ru" data-theme="light" data-theme-mode="system">
+<html lang="ru">
   <head>
-    <!-- meta, OG/Twitter, PWA icons -->
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="FX Multi — конвертер валют с несколькими целями сразу. Быстро, без регистрации"
+      content="FX Multi — конвертер валют и криптовалют с несколькими целями сразу."
     />
+    <meta name="theme-color" content="#3159d9" />
     <meta name="color-scheme" content="light dark" />
-    <link rel="canonical" href="./" id="seo-canonical" />
     <meta property="og:type" content="website" />
     <meta property="og:title" content="FX Multi" />
     <meta
       property="og:description"
-      content="Сумма сразу во многих валютах — быстрый конвертер без регистрации"
+      content="Одна сумма — сразу во всех нужных валютах."
     />
-    <meta property="og:url" content="" id="seo-og-url" />
-    <meta property="og:locale" content="ru_RU" id="seo-og-locale" />
-    <meta property="og:locale:alternate" content="en_US" />
-    <meta property="og:image" content="icons/icon-512.png" id="seo-og-image" />
+    <meta property="og:image" content="/icons/icon-512.png" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="FX Multi" />
-    <meta
-      name="twitter:description"
-      content="Сумма сразу во многих валютах — быстрый конвертер без регистрации"
-    />
-    <meta
-      name="twitter:image"
-      content="icons/icon-512.png"
-      id="seo-twitter-image"
-    />
-    <title>FX Multi</title>
-    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-    <link rel="apple-touch-icon" href="icons/icon-180.png" />
-    <link rel="manifest" href="manifest.webmanifest" />
-    <meta name="theme-color" content="#D61F26" />
-    <script type="application/ld+json" id="seo-jsonld">
-      {
-        "@context": "https://schema.org",
-        "@type": "WebApplication",
-        "name": "FX Multi",
-        "description": "Convert one amount into many currencies at once",
-        "applicationCategory": "FinanceApplication",
-        "operatingSystem": "Any",
-        "inLanguage": ["ru", "en"],
-        "offers": {
-          "@type": "Offer",
-          "price": "0",
-          "priceCurrency": "USD"
-        }
-      }
-    </script>
-
-    <!-- fonts: non-blocking load + system fallback in CSS -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="preconnect" href="https://flagcdn.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@600&display=swap"
-      rel="stylesheet"
-      media="print"
-      onload="this.media = 'all'"
-    />
-    <noscript>
-      <link
-        href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@600&display=swap"
-        rel="stylesheet"
-      />
-    </noscript>
-    <link rel="stylesheet" href="css/styles.css" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/icons/icon-180.png" />
+    <title>FX Multi — конвертер валют</title>
     <script>
-      // apply theme and lang before modules load, no flash
-      (function () {
-        try {
-          var raw = localStorage.getItem('fx-multi-state');
-          var parsed = raw ? JSON.parse(raw) : null;
-          var theme = (parsed && parsed.theme) || 'system';
-          var dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-          var resolved =
-            theme === 'light' || theme === 'dark'
-              ? theme
-              : dark
-                ? 'dark'
-                : 'light';
-          document.documentElement.dataset.theme = resolved;
-          document.documentElement.dataset.themeMode = theme;
-
-          var locale = parsed && parsed.locale;
-          if (locale !== 'ru' && locale !== 'en') {
-            var langs = [].concat(
-              navigator.languages || [],
-              navigator.language || '',
-            );
-            locale = 'en';
-            for (var i = 0; i < langs.length; i++) {
-              if (String(langs[i]).toLowerCase().indexOf('ru') === 0) {
-                locale = 'ru';
-                break;
-              }
-            }
-          }
-          document.documentElement.lang = locale;
-        } catch (e) {}
-      })();
+      try {
+        // Apply the saved color scheme before React mounts to avoid a theme flash.
+        var saved = JSON.parse(localStorage.getItem('fx-multi-state') || '{}');
+        var mode = saved.theme || 'system';
+        var dark =
+          mode === 'dark' ||
+          (mode === 'system' &&
+            matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+      } catch (_) {}
     </script>
   </head>
   <body>
-    <a class="skip-link" href="#main" data-i18n="skipToContent"
-      >К основному содержимому</a
-    >
-
-    <div class="shell">
-      <!-- brand + theme/locale -->
-      <header class="top">
-        <div class="brand">
-          <h1 class="brand-mark" data-i18n="appName">FX Multi</h1>
-          <p class="brand-tag" data-i18n="tagline">
-            Сумма сразу во многих валютах
-          </p>
-        </div>
-
-        <div class="controls">
-          <label class="field field-compact">
-            <span data-i18n="themeLabel">Тема</span>
-            <select id="theme" data-i18n-aria="themeLabel">
-              <option value="system">Системная</option>
-              <option value="light">Светлая</option>
-              <option value="dark">Тёмная</option>
-            </select>
-          </label>
-
-          <label class="field field-compact">
-            <span data-i18n="langLabel">Язык</span>
-            <select id="locale" data-i18n-aria="langLabel">
-              <option value="ru">RU</option>
-              <option value="en">EN</option>
-            </select>
-          </label>
-        </div>
-      </header>
-
-      <main id="main">
-        <!-- amount, base, swap, rates status -->
-        <section class="convert">
-          <div class="convert-grid">
-            <label class="field amount-hero">
-              <span data-i18n="amountLabel">Сумма</span>
-              <div class="amount-wrap">
-                <input
-                  id="amount"
-                  type="text"
-                  inputmode="decimal"
-                  autocomplete="off"
-                  placeholder="100"
-                  value="100"
-                  aria-describedby="status"
-                />
-                <button
-                  type="button"
-                  id="amount-clear"
-                  class="amount-clear"
-                  hidden
-                  data-i18n-aria="clearAmount"
-                  aria-label="Очистить сумму"
-                >
-                  ×
-                </button>
-              </div>
-            </label>
-
-            <div class="base-row">
-              <label class="field convert-base" for="base-input">
-                <span data-i18n="baseLabel">Из валюты</span>
-                <div class="base-select-wrap">
-                  <div class="base-combobox">
-                    <span id="base-flag" class="flag" aria-hidden="true"></span>
-                    <input type="hidden" id="base" value="" />
-                    <input
-                      type="text"
-                      id="base-input"
-                      role="combobox"
-                      autocomplete="off"
-                      spellcheck="false"
-                      aria-autocomplete="list"
-                      aria-expanded="false"
-                      aria-controls="base-listbox"
-                      aria-haspopup="listbox"
-                    />
-                  </div>
-                  <ul
-                    id="base-listbox"
-                    class="base-listbox"
-                    role="listbox"
-                    hidden
-                  ></ul>
-                </div>
-              </label>
-              <button
-                type="button"
-                id="swap-currencies"
-                class="btn-swap"
-                data-i18n="swapCurrencies"
-                data-i18n-aria="swapCurrencies"
-              >
-                Поменять
-              </button>
-            </div>
-          </div>
-
-          <div class="status-row">
-            <p
-              id="status"
-              class="status"
-              data-tone="muted"
-              role="status"
-              aria-live="polite"
-            ></p>
-            <button
-              type="button"
-              id="refresh-rates"
-              class="btn-text"
-              data-i18n-aria="refreshRates"
-              aria-busy="false"
-            >
-              <span class="spinner" hidden aria-hidden="true"></span>
-              <span data-i18n="refreshRates">Обновить</span>
-            </button>
-          </div>
-        </section>
-
-        <!-- converted amounts list -->
-        <section class="results-block" aria-labelledby="results-heading">
-          <div class="section-head">
-            <h2 id="results-heading" data-i18n="resultsTitle">Результат</h2>
-            <button
-              type="button"
-              id="open-manage"
-              class="btn-text"
-              aria-expanded="false"
-              aria-haspopup="dialog"
-              data-i18n="openManage"
-            >
-              Настроить список
-            </button>
-          </div>
-          <ul id="results" class="results" aria-busy="false"></ul>
-        </section>
-      </main>
-    </div>
-
-    <!-- bottom-sheet: pick and reorder currencies -->
-    <div id="manage-panel" class="manage" hidden>
-      <div
-        class="manage-sheet"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="manage-heading"
-      >
-        <div class="manage-head">
-          <div>
-            <h2 id="manage-heading" data-i18n="manageTitle">Валюты в списке</h2>
-            <p data-i18n="manageHint">Выберите, какие валюты показывать</p>
-          </div>
-          <button
-            type="button"
-            id="close-manage"
-            class="btn"
-            data-i18n="closeManage"
-          >
-            Готово
-          </button>
-        </div>
-        <label class="manage-search">
-          <span class="visually-hidden" data-i18n="searchCurrencies"
-            >Поиск валюты</span
-          >
-          <input
-            id="manage-search"
-            type="search"
-            autocomplete="off"
-            data-i18n-placeholder="searchPlaceholder"
-            placeholder="Поиск…"
-          />
-        </label>
-        <div class="manage-tabs" role="tablist" data-i18n-aria="assetType" aria-label="Тип валюты">
-          <button
-            type="button"
-            role="tab"
-            id="tab-fiat"
-            class="manage-tab"
-            data-tab="fiat"
-            aria-selected="true"
-            data-i18n="tabFiat"
-          >
-            Фиат
-          </button>
-          <button
-            type="button"
-            role="tab"
-            id="tab-crypto"
-            class="manage-tab"
-            data-tab="crypto"
-            aria-selected="false"
-            data-i18n="tabCrypto"
-          >
-            Крипто
-          </button>
-        </div>
-        <div id="manage-list" class="manage-list" role="tabpanel"></div>
-      </div>
-    </div>
-
-    <script type="module" src="js/app.js"></script>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -1,0 +1,8 @@
+{
+  "files": [],
+  // Build the browser application and tool configuration as separate projects.
+  "references": [
+    { "path": "./tsconfig.app.json" },
+    { "path": "./tsconfig.node.json" }
+  ]
+}

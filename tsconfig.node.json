@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    // Enable project references for configuration files executed by Node.js.
+    "composite": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    // Configuration files are consumed directly by their respective tools.
+    "noEmit": true,
+    "allowImportingTsExtensions": true
+  },
+  // Only tool configuration belongs to the Node.js TypeScript project.
+  "include": ["vite.config.ts", "playwright.config.ts", "eslint.config.js"]
+}
