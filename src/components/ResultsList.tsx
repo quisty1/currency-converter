@@ -51,7 +51,7 @@ function ResultCard({
 }) {
   const { locale, t } = useI18n();
   const { amount, base } = useSettings();
-  const numericAmount = parseAmount(amount);
+  const numericAmount = parseAmount(amount, locale);
   const result =
     numericAmount == null ? null : convert(numericAmount, base, code, payload);
   const rate = unitRate(base, code, payload);

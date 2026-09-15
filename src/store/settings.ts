@@ -76,6 +76,7 @@ export function readSettings(): SettingsState {
 interface SettingsActions {
   setAmount: (amount: string) => void;
   setBase: (base: string) => void;
+  swapBaseWith: (target: string) => void;
   setTargets: (targets: string[]) => void;
   setTheme: (theme: ThemeMode) => void;
   setLocale: (locale: Locale) => void;
@@ -96,6 +97,20 @@ export const useSettings = create<SettingsState & SettingsActions>((set) => ({
         ),
       ].filter((target) => target !== base),
     })),
+  swapBaseWith: (target) =>
+    set((state) => {
+      if (target === state.base || !state.targets.includes(target)) {
+        return state;
+      }
+      return {
+        base: target,
+        targets: [
+          ...new Set(
+            state.targets.map((item) => (item === target ? state.base : item)),
+          ),
+        ].filter((item) => item !== target),
+      };
+    }),
   setTargets: (targets) => set({ targets: [...new Set(targets)] }),
   setTheme: (theme) => set({ theme }),
   setLocale: (locale) => set({ locale }),
@@ -140,7 +155,11 @@ export function settingsFromUrl(current: SettingsState): SettingsState {
   return {
     ...current,
     amount: params.has('amount')
-      ? amount && parseAmount(amount) != null
+      ? amount &&
+        parseAmount(
+          amount,
+          locale === 'en' || locale === 'ru' ? locale : current.locale,
+        ) != null
         ? amount
         : defaults.amount
       : current.amount,
@@ -198,7 +217,9 @@ export function urlHasInvalidSettings() {
       (!toRaw.length ||
         migrated.length !== toRaw.length ||
         new Set(migrated).size !== migrated.length)) ||
-    (params.has('amount') && (!amount || parseAmount(amount) == null)) ||
+    (params.has('amount') &&
+      (!amount ||
+        parseAmount(amount, locale === 'en' ? 'en' : 'ru') == null)) ||
     (params.has('locale') && locale !== 'ru' && locale !== 'en')
   );
 }

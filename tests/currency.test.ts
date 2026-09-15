@@ -36,9 +36,18 @@ const payload: RatesPayload = {
 
 describe('currency domain', () => {
   it('parses localized amounts', () => {
-    expect(parseAmount('1 234,50')).toBe(1234.5);
+    expect(parseAmount('1 234,50', 'ru')).toBe(1234.5);
+    expect(parseAmount('1.234,50', 'ru')).toBe(1234.5);
+    expect(parseAmount('1,234.50', 'en')).toBe(1234.5);
+    expect(parseAmount('1,000', 'en')).toBe(1000);
+    expect(parseAmount('1,000', 'ru')).toBe(1);
+    expect(parseAmount('12.5', 'ru')).toBe(12.5);
+    expect(parseAmount(',5', 'ru')).toBe(0.5);
     expect(parseAmount('')).toBeNull();
     expect(parseAmount('not a number')).toBeNull();
+    expect(parseAmount('-10', 'ru')).toBeNull();
+    expect(parseAmount('1e3', 'en')).toBeNull();
+    expect(parseAmount('1,23,4', 'en')).toBeNull();
   });
   it('converts direct, inverse, cross and crypto rates', () => {
     expect(convert(100, 'USD', 'EUR', payload)).toBe(90);

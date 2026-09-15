@@ -28,8 +28,9 @@ export function ConverterHero({
   onSwap: () => void;
 }) {
   const { locale, t } = useI18n();
-  const { amount, base, setAmount, setBase } = useSettings();
-  const invalid = amount.trim() !== '' && parseAmount(amount) == null;
+  const { amount, base, targets, setAmount, setBase } = useSettings();
+  const invalid = amount.trim() !== '' && parseAmount(amount, locale) == null;
+  const canSwap = targets.some((code) => code !== base);
   return (
     <Card
       id="converter"
@@ -173,7 +174,7 @@ export function ConverterHero({
                 color="inherit"
                 aria-label={t('swap')}
                 onClick={onSwap}
-                disabled={!codes.length}
+                disabled={!codes.length || !canSwap}
                 sx={{
                   minWidth: 58,
                   px: 1,

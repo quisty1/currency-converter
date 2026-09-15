@@ -37,7 +37,8 @@ import { CurrencyManager } from './components/CurrencyManager';
 
 export function AppContent() {
   const { t, locale } = useI18n();
-  const { amount, base, targets, theme, setBase, setTargets } = useSettings();
+  const { amount, base, targets, theme, setBase, setTargets, swapBaseWith } =
+    useSettings();
   const [managerOpen, setManagerOpen] = useState(false);
   const [urlCorrected, setUrlCorrected] = useState(urlHasInvalidSettings);
   const query = useQuery({
@@ -64,7 +65,8 @@ export function AppContent() {
 
   useEffect(() => {
     if (!payload) return;
-    const markCorrected = () => window.setTimeout(() => setUrlCorrected(true), 0);
+    const markCorrected = () =>
+      window.setTimeout(() => setUrlCorrected(true), 0);
     const pending = resolvePendingLegacyUrl(payload);
     if (pending) {
       if (pending.base) setBase(pending.base);
@@ -132,8 +134,7 @@ export function AppContent() {
   const swap = () => {
     const first = targets.find((code) => code !== base);
     if (!first) return;
-    // Promote the previous base into the result list after selecting the first target.
-    setBase(first);
+    swapBaseWith(first);
   };
   const cached = Boolean(payload && query.isError);
 

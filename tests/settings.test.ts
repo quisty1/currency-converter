@@ -62,6 +62,16 @@ describe('URL settings normalization', () => {
     expect(urlHasInvalidSettings()).toBe(false);
   });
 
+  it('interprets ambiguous grouped amounts using the URL locale', () => {
+    history.replaceState(null, '', '/?amount=1,000&locale=en');
+    expect(settingsFromUrl(current).amount).toBe('1,000');
+    expect(urlHasInvalidSettings()).toBe(false);
+
+    history.replaceState(null, '', '/?amount=1.000&locale=ru');
+    expect(settingsFromUrl(current).amount).toBe('1.000');
+    expect(urlHasInvalidSettings()).toBe(false);
+  });
+
   it('migrates a legacy symbol after the provider catalog arrives', () => {
     history.replaceState(null, '', '/?from=USD&to=SAME');
     settingsFromUrl(current);

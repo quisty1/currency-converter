@@ -113,13 +113,18 @@ describe('App rate states and controls', () => {
     expect(calls).toBeGreaterThanOrEqual(2);
   });
 
-  it('uses the same base replacement logic for swap', async () => {
+  it('swaps the base with the first result without losing other targets', async () => {
     const user = userEvent.setup();
     renderApp();
     await screen.findByText('9,000 RUB');
     await user.click(screen.getByRole('button', { name: 'Swap currencies' }));
     expect(useSettings.getState().base).toBe('fiat:RUB');
-    expect(useSettings.getState().targets[0]).toBe('fiat:USD');
+    expect(useSettings.getState().targets).toEqual([
+      'fiat:USD',
+      'fiat:EUR',
+      'crypto:bitcoin',
+    ]);
+    expect(await screen.findByText('1.1111 USD')).toBeVisible();
   });
 
   it('keeps stale cached results visible when both providers are offline', async () => {

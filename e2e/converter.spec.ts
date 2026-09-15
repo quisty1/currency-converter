@@ -53,6 +53,16 @@ test('removes a currency directly from the results list', async ({ page }) => {
   await expect(page).toHaveURL(/to=RUB%2Ccrypto%3Abitcoin/);
 });
 
+test('swaps the base with the first result and keeps the old base visible', async ({
+  page,
+}) => {
+  await page.getByRole('button', { name: 'Поменять местами' }).click();
+
+  await expect(page).toHaveURL(/from=RUB/);
+  await expect(page).toHaveURL(/to=USD%2CEUR%2Ccrypto%3Abitcoin/);
+  await expect(page.getByText('1,1111 USD')).toBeVisible();
+});
+
 test('fits long results on an iPhone-sized viewport', async ({ page }) => {
   await page.setViewportSize({ width: 393, height: 852 });
   await page.goto(

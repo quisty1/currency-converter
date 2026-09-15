@@ -1,4 +1,4 @@
-import type { RatesPayload } from './types';
+import type { Locale, RatesPayload } from './types';
 import { KNOWN_FIAT_CODES } from './currencyCountry';
 
 export const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
@@ -73,12 +73,72 @@ export const assetCode = (id: string, payload?: RatesPayload | null) =>
       CRYPTO_SEED_SYMBOLS[id.replace('crypto:', '')] ||
       id.replace('crypto:', '');
 
-export function parseAmount(value: string): number | null {
-  // Accept spaces and decimal commas commonly used in localized numeric input.
-  const normalized = value.trim().replace(/\s/g, '').replace(',', '.');
-  if (!normalized) return null;
+export function parseAmount(
+  value: string,
+  locale: Locale = 'ru',
+): number | null {
+  // Spaces (including non-breaking ones) are accepted as digit grouping.
+  // A locale's own separator wins for ambiguous values such as `1,000`.
+  const compact = value.trim().replace(/[\s\u00a0\u202f]/g, '');
+  if (!compact || !/^(?:\d+(?:[.,]\d+)*|[.,]\d+)$/.test(compact)) {
+    return null;
+  }
+
+  const commaCount = (compact.match(/,/g) || []).length;
+  const dotCount = (compact.match(/\./g) || []).length;
+  const decimalSeparator = locale === 'ru' ? ',' : '.';
+  const groupingSeparator = locale === 'ru' ? '.' : ',';
+  let normalized: string;
+
+  if (commaCount && dotCount) {
+    const decimal =
+      compact.lastIndexOf(',') > compact.lastIndexOf('.') ? ',' : '.';
+    const grouping = decimal === ',' ? '.' : ',';
+    if ((compact.match(new RegExp(`\\${decimal}`, 'g')) || []).length !== 1) {
+      return null;
+    }
+    const [integer = '', fraction = ''] = compact.split(decimal);
+    if (!fraction || !validGroupedInteger(integer, grouping)) return null;
+    normalized = `${integer.replaceAll(grouping, '')}.${fraction}`;
+  } else {
+    const separator = commaCount ? ',' : dotCount ? '.' : undefined;
+    if (!separator) {
+      normalized = compact;
+    } else {
+      const count = separator === ',' ? commaCount : dotCount;
+      const parts = compact.split(separator);
+      if (count > 1) {
+        if (!validGroupedInteger(compact, separator)) return null;
+        normalized = compact.replaceAll(separator, '');
+      } else if (separator === decimalSeparator) {
+        const [integer = '0', fraction = ''] = parts;
+        if (!fraction) return null;
+        normalized = `${integer || '0'}.${fraction}`;
+      } else if (
+        separator === groupingSeparator &&
+        validGroupedInteger(compact, separator)
+      ) {
+        normalized = compact.replace(separator, '');
+      } else {
+        // Accept the other locale's decimal separator when it is unambiguous.
+        const [integer = '0', fraction = ''] = parts;
+        if (!fraction) return null;
+        normalized = `${integer || '0'}.${fraction}`;
+      }
+    }
+  }
+
   const result = Number(normalized);
-  return Number.isFinite(result) ? result : null;
+  return Number.isFinite(result) && result >= 0 ? result : null;
+}
+
+function validGroupedInteger(value: string, separator: string) {
+  const groups = value.split(separator);
+  return (
+    groups.length > 1 &&
+    /^\d{1,3}$/.test(groups[0] || '') &&
+    groups.slice(1).every((group) => /^\d{3}$/.test(group))
+  );
 }
 
 export function convert(
