@@ -8,6 +8,8 @@ export default defineConfig({
   reporter: [['html', { open: 'never' }]],
   use: {
     baseURL: 'http://127.0.0.1:4173',
+    // Keep locale-sensitive timestamps identical on developer machines and CI.
+    timezoneId: 'UTC',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
